@@ -66,7 +66,16 @@ spawnSync('node', [GATE, SAMPLE, '--baseline'], { encoding: 'utf8' });
     r.code === 3 && /bounded-dispatch/.test(r.out), `exit ${r.code}: ${r.out}`);
 }
 
+// 5. ROT D — scope creep: RENAME a dispatch case to an out-of-scope capability. Count is unchanged
+//    (bounded-dispatch passes), but scope-boundary catches the new capability — what a ratchet misses.
+{
+  const go = CLEAN_GO.replace('\tcase "nodes":', '\tcase "metrics":');
+  const r = runGate(sampleWith(go));
+  expect('rot: out-of-scope capability  BLOCKED on scope-boundary (count unchanged, bounded-dispatch passes)',
+    r.code === 3 && /✗ \[scope-boundary\]/.test(r.out) && !/✗ \[bounded-dispatch\]/.test(r.out), `exit ${r.code}: ${r.out}`);
+}
+
 console.log(failed === 0
-  ? '\nPASS: gate passes clean code and blocks all 3 k10s-style rot diffs ✅'
+  ? '\nPASS: gate passes clean code and blocks all 4 k10s-style rot diffs ✅'
   : `\nFAIL: ${failed} case(s) did not behave as expected`);
 process.exit(failed === 0 ? 0 : 1);

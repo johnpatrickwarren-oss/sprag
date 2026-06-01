@@ -130,7 +130,17 @@ function astgrepMetric(inv, src) {
   throw new Error(`ast-grep: unknown check kind ${c.kind}`);
 }
 
+// scope_diff (T3) is engine-agnostic: it lexically extracts the capability names (dispatch
+// case-label string literals) and counts those NOT in the declared `allowed` scope. Unlike a count
+// ratchet, this catches a RENAME to an out-of-scope capability even when the count is unchanged.
+function scopeOutOfBoundsCount(src, allowed) {
+  const labels = [...src.matchAll(/case\s+"([^"]+)"/g)].map((m) => m[1]);
+  const set = new Set(allowed || []);
+  return labels.filter((l) => !set.has(l)).length;
+}
+
 export function metricValue(inv, src) {
+  if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check.allowed);
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
 

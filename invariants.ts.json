@@ -2,7 +2,10 @@
   {
     "id": "model-not-god-object",
     "intent": "Model stays a thin coordinator; per-view state lives in view objects, not here (Tenets 1 & 2).",
-    "check": { "kind": "struct_field_count", "struct": "Model" },
+    "check": {
+      "kind": "struct_field_count",
+      "struct": "Model"
+    },
     "max": 8,
     "mode": "ratchet",
     "severity": "block",
@@ -12,7 +15,9 @@
   {
     "id": "no-positional-rows",
     "intent": "Rows are typed; never index a flattened array by magic integer like row[3] (Tenet 4).",
-    "check": { "kind": "magic_index_count" },
+    "check": {
+      "kind": "magic_index_count"
+    },
     "max": 0,
     "mode": "ratchet",
     "severity": "block",
@@ -22,7 +27,10 @@
   {
     "id": "bounded-dispatch",
     "intent": "No growth of central per-view branching; views own behavior via the View interface (Tenet 2).",
-    "check": { "kind": "switch_case_count", "on": "m.view" },
+    "check": {
+      "kind": "switch_case_count",
+      "on": "m.view"
+    },
     "mode": "ratchet",
     "severity": "block",
     "lang": "ts",
@@ -31,7 +39,27 @@
   {
     "id": "no-async-mutation",
     "intent": "Background workers send messages; they never mutate shared state directly inside a timer/async callback (Tenet 5: the k10s goroutine data race).",
-    "check": { "kind": "forbid_pattern", "pattern": "$O.$F = $V", "inside": "setInterval($$$)" },
+    "check": {
+      "kind": "forbid_pattern",
+      "pattern": "$O.$F = $V",
+      "inside": "setInterval($$$)"
+    },
+    "max": 0,
+    "mode": "ratchet",
+    "severity": "block",
+    "lang": "ts",
+    "engine": "ast-grep"
+  },
+  {
+    "id": "scope-boundary",
+    "intent": "Stay within declared scope: dispatch only the approved capabilities (Tenet 3 — fight scope creep, e.g. GPU-dashboard -> k9s-clone).",
+    "check": {
+      "kind": "scope_diff",
+      "allowed": [
+        "pods",
+        "nodes"
+      ]
+    },
     "max": 0,
     "mode": "ratchet",
     "severity": "block",

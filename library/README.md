@@ -11,7 +11,7 @@ enforces it).
 | T2 — per-view isolation (no central dispatch growth) | `bounded-dispatch` | `switch_case_count` (ratchet) | **ready** |
 | T4 — typed records (no positional arrays) | `no-positional-rows` | `magic_index_count` | **ready** |
 | T5 — mutations on the main loop (no async-callback writes) | `no-async-mutation` | `forbid_pattern` | **ready** |
-| T3 — explicit scope boundary (no scope creep) | `scope-boundary` | `scope_diff` | planned |
+| T3 — explicit scope boundary (no scope creep) | `scope-boundary` | `scope_diff` | **ready** |
 
 **ready** = implemented check kind (works today on Go via the heuristic engine and TypeScript via the
 ast-grep AST engine). **planned** = the check kind is on the roadmap (design §4); the template shows

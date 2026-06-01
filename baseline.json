@@ -1,5 +1,6 @@
 {
   "model-not-god-object": 6,
   "no-positional-rows": 0,
-  "bounded-dispatch": 2
+  "bounded-dispatch": 2,
+  "scope-boundary": 0
 }
