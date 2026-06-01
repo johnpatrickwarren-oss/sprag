@@ -38,12 +38,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/johnpatrickwarren-oss/anchor.git",
-    "directory": "prototypes/architectural-gate"
+    "url": "https://github.com/johnpatrickwarren-oss/arch-gate.git"
   },
-  "homepage": "https://github.com/johnpatrickwarren-oss/anchor/tree/main/prototypes/architectural-gate#readme",
+  "homepage": "https://github.com/johnpatrickwarren-oss/arch-gate#readme",
   "bugs": {
-    "url": "https://github.com/johnpatrickwarren-oss/anchor/issues"
+    "url": "https://github.com/johnpatrickwarren-oss/arch-gate/issues"
   },
   "dependencies": {
     "@ast-grep/lang-go": "^0.0.6",
