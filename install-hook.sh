@@ -1,12 +1,15 @@
 #!/bin/bash
-# install-hook.sh <repo-dir> <src-rel-path> [invariants-file]
+# install-hook.sh <repo-dir> <src-rel-path[,src-rel-path...]> [invariants-file]
 # Installs an architectural-invariant PRE-COMMIT gate into <repo>/.git/hooks/pre-commit.
 # The hook blocks a commit that makes architecture WORSE THAN HEAD (ratchet vs the last commit),
 # so rot can't land. Existing debt in HEAD is accepted (ratchet baseline); only NEW debt blocks.
+# <src-rel-path> may be a COMMA-SEPARATED list of dirs (e.g. "engine,tools") — each is gated
+# independently against its OWN HEAD baseline, so a repo with separate source trees is fully covered
+# without scanning unrelated dirs (e.g. linked worktrees / vendored copies under the repo root).
 # Bypass (discouraged): git commit --no-verify.  [invariants-file] defaults to the gate's invariants.json.
 set -euo pipefail
-REPO="${1:?usage: install-hook.sh <repo-dir> <src-rel-path> [invariants-file]}"
-SRC="${2:?usage: install-hook.sh <repo-dir> <src-rel-path> [invariants-file]}"
+REPO="${1:?usage: install-hook.sh <repo-dir> <src-rel-path[,...]> [invariants-file]}"
+SRC="${2:?usage: install-hook.sh <repo-dir> <src-rel-path[,...]> [invariants-file]}"
 GATE="$(cd "$(dirname "$0")" && pwd)/arch-gate.mjs"
 INV="${3:-}"
 [ -n "$INV" ] && INV="$(cd "$(dirname "$INV")" && pwd)/$(basename "$INV")"   # absolutize
@@ -23,17 +26,27 @@ cat > "$HOOK" <<EOF
 # architectural-invariant pre-commit gate (anchor prototypes/architectural-gate).
 set -uo pipefail
 ARCH_GATE="$GATE"
-ARCH_SRC="$SRC"
+ARCH_SRCS="$SRC"                          # comma-separated list of src-rel dirs
 repo="\$(git rev-parse --show-toplevel)"
 tmp="\$(mktemp -d)"; trap 'rm -rf "\$tmp"' EXIT
-echo '{}' > "\$tmp/baseline.json"          # no HEAD yet -> only absolute checks apply
-if git rev-parse --verify -q HEAD >/dev/null; then
-  git archive HEAD | tar -x -C "\$tmp" 2>/dev/null || true
-  if [ -d "\$tmp/\$ARCH_SRC" ]; then
-    node "\$ARCH_GATE" "\$tmp/\$ARCH_SRC" $INV_FLAG --baseline --baseline-out "\$tmp/baseline.json" >/dev/null 2>&1 || true
+have_head=0; git rev-parse --verify -q HEAD >/dev/null && have_head=1
+[ "\$have_head" = 1 ] && git archive HEAD | tar -x -C "\$tmp" 2>/dev/null || true   # HEAD tree once
+
+fail=0
+IFS=',' read -ra _DIRS <<< "\$ARCH_SRCS"
+for d in "\${_DIRS[@]}"; do
+  [ -n "\$d" ] || continue
+  bl="\$tmp/baseline-\$(printf '%s' "\$d" | tr '/.' '__').json"
+  echo '{}' > "\$bl"                       # no HEAD (or dir absent in HEAD) -> only absolute checks
+  if [ "\$have_head" = 1 ] && [ -d "\$tmp/\$d" ]; then
+    node "\$ARCH_GATE" "\$tmp/\$d" $INV_FLAG --baseline --baseline-out "\$bl" >/dev/null 2>&1 || true
   fi
-fi
-if ! node "\$ARCH_GATE" "\$repo/\$ARCH_SRC" $INV_FLAG --baseline-in "\$tmp/baseline.json"; then
+  if [ -d "\$repo/\$d" ]; then
+    node "\$ARCH_GATE" "\$repo/\$d" $INV_FLAG --baseline-in "\$bl" || fail=1
+  fi
+done
+
+if [ "\$fail" != 0 ]; then
   echo ""
   echo ">> commit BLOCKED: architectural-invariant regression vs HEAD. Fix the violation(s) above,"
   echo "   or record a deliberate baseline change. Bypass (discouraged): git commit --no-verify"
