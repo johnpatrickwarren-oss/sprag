@@ -244,39 +244,22 @@ export function metricValue(inv, src, dir) {
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
 
-function main() {
-  const argv = process.argv.slice(2);
-  let dir = null, writeBaseline = false, baselineOut = null, baselineIn = null, json = false, invFile = null;
+function parseArgs(argv) {
+  const o = { dir: null, writeBaseline: false, baselineOut: null, baselineIn: null, json: false, invFile: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--baseline') writeBaseline = true;
-    else if (a === '--baseline-out') baselineOut = argv[++i];
-    else if (a === '--baseline-in') baselineIn = argv[++i];
-    else if (a === '--invariants') invFile = argv[++i];
-    else if (a === '--json') json = true;
-    else if (!a.startsWith('--')) dir = a;
+    if (a === '--baseline') o.writeBaseline = true;
+    else if (a === '--baseline-out') o.baselineOut = argv[++i];
+    else if (a === '--baseline-in') o.baselineIn = argv[++i];
+    else if (a === '--invariants') o.invFile = argv[++i];
+    else if (a === '--json') o.json = true;
+    else if (!a.startsWith('--')) o.dir = a;
     else { console.error(`arch-gate: unknown arg ${a}`); process.exit(64); }
   }
-  if (!dir) { console.error('usage: arch-gate.mjs <dir> [--invariants f] [--baseline [--baseline-out f]] [--baseline-in f] [--json]'); process.exit(64); }
+  return o;
+}
 
-  const invariants = invFile ? JSON.parse(readFileSync(invFile, 'utf8')) : INVARIANTS;
-  const srcByLang = {};
-  const getSrc = (lang) => (srcByLang[lang] ??= readSource(dir, lang));
-
-  const metrics = {};
-  for (const inv of invariants) metrics[inv.id] = metricValue(inv, getSrc(inv.lang || 'go'), dir);
-
-  if (writeBaseline) {
-    const out = baselineOut || BASELINE_PATH;
-    writeFileSync(out, JSON.stringify(metrics, null, 2) + '\n');
-    if (!json) console.log('baseline written:', JSON.stringify(metrics));
-    process.exit(0);
-  }
-
-  const allSrc = Object.values(srcByLang).join('\n');
-  const suppressions = collectSuppressions(allSrc);
-  const baselinePath = baselineIn || BASELINE_PATH;
-  const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {};
+function computeViolations(invariants, metrics, baseline) {
   const violations = [];
   for (const inv of invariants) {
     const v = metrics[inv.id];
@@ -287,14 +270,10 @@ function main() {
     }
     if (reasons.length) violations.push({ id: inv.id, value: v, baseline: baseline[inv.id], reasons, intent: inv.intent, severity: inv.severity });
   }
-  const blocked = violations.length > 0;
-  const suppressionList = Object.entries(suppressions).flatMap(([id, ls]) => ls.map((s) => ({ id, ...s })));
+  return violations;
+}
 
-  if (json) {
-    process.stdout.write(JSON.stringify({ dir, metrics, baseline, blocked, violations, suppressions: suppressionList }, null, 2) + '\n');
-    process.exit(blocked ? 3 : 0);
-  }
-
+function report(dir, invariants, metrics, baseline, violations, suppressionList) {
   console.log(`arch-gate: ${dir}`);
   for (const inv of invariants) {
     const b = baseline[inv.id];
@@ -304,13 +283,42 @@ function main() {
     console.log('Suppressions (auditable — escape hatch is visible, not silent):');
     for (const s of suppressionList) console.log(`  ~ [${s.id}] line ${s.line}: ${s.reason}`);
   }
-  if (!blocked) { console.log('PASS: no architectural-invariant violations.'); process.exit(0); }
+  if (!violations.length) { console.log('PASS: no architectural-invariant violations.'); return; }
   console.log('\nBLOCKED — architectural invariant(s) violated:');
   for (const vio of violations) {
     console.log(`  ✗ [${vio.id}] ${vio.reasons.join('; ')}`);
     console.log(`      intent: ${vio.intent}`);
   }
-  process.exit(3);
+}
+
+function main() {
+  const { dir, writeBaseline, baselineOut, baselineIn, json, invFile } = parseArgs(process.argv.slice(2));
+  if (!dir) { console.error('usage: arch-gate.mjs <dir> [--invariants f] [--baseline [--baseline-out f]] [--baseline-in f] [--json]'); process.exit(64); }
+  const invariants = invFile ? JSON.parse(readFileSync(invFile, 'utf8')) : INVARIANTS;
+  const srcByLang = {};
+  const getSrc = (lang) => (srcByLang[lang] ??= readSource(dir, lang));
+  const metrics = {};
+  for (const inv of invariants) metrics[inv.id] = metricValue(inv, getSrc(inv.lang || 'go'), dir);
+
+  if (writeBaseline) {
+    writeFileSync(baselineOut || BASELINE_PATH, JSON.stringify(metrics, null, 2) + '\n');
+    if (!json) console.log('baseline written:', JSON.stringify(metrics));
+    process.exit(0);
+  }
+
+  const suppressionList = Object.entries(collectSuppressions(Object.values(srcByLang).join('\n')))
+    .flatMap(([id, ls]) => ls.map((s) => ({ id, ...s })));
+  const baselinePath = baselineIn || BASELINE_PATH;
+  const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {};
+  const violations = computeViolations(invariants, metrics, baseline);
+  const blocked = violations.length > 0;
+
+  if (json) {
+    process.stdout.write(JSON.stringify({ dir, metrics, baseline, blocked, violations, suppressions: suppressionList }, null, 2) + '\n');
+  } else {
+    report(dir, invariants, metrics, baseline, violations, suppressionList);
+  }
+  process.exit(blocked ? 3 : 0);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
