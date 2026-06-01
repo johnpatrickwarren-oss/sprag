@@ -1,1 +1,14 @@
-{"name":"anchor-architectural-gate","type":"module","private":true,"description":"P0/P1 architectural-invariant gate prototype","dependencies":{"@ast-grep/lang-go":"^0.0.6","@ast-grep/napi":"^0.43.0"}}
+{
+  "name": "anchor-architectural-gate",
+  "type": "module",
+  "private": true,
+  "description": "P0/P1 architectural-invariant gate prototype",
+  "dependencies": {
+    "@ast-grep/lang-go": "^0.0.6",
+    "@ast-grep/napi": "^0.43.0"
+  },
+  "scripts": {
+    "test": "node run-tests.mjs",
+    "gate": "node arch-gate.mjs"
+  }
+}
