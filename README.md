@@ -116,9 +116,23 @@ Checks are computed by a per-invariant **engine** (`engine` + `lang` fields):
 - **`heuristic`** (default) — lightweight text/brace parsing of Go-flavored source, no deps (fallback).
 
 Built-in check kinds: `struct_field_count`, `switch_case_count`, `magic_index_count`, `forbid_pattern`,
-`oversized_files`, `max_function_lines`, `module_fanin`, `scope_diff`. For anything bespoke, the
-**`ast_grep_rule`** kind takes a raw ast-grep rule object, so a project can encode its *own*
-architectural rules in JSON with no code changes.
+`oversized_files`, `max_function_lines`, `module_fanin`, `scope_diff`, `forbid_path`, `time_bomb_tests`.
+For anything bespoke, the **`ast_grep_rule`** kind takes a raw ast-grep rule object, so a project can
+encode its *own* architectural rules in JSON with no code changes.
+
+Two of these target **layering / dependency-direction** rot, not size/coupling — a class the metric
+checks are blind to (learned by refactoring real repos where the rot lived there, not in file size):
+
+- **`forbid_path`** `{ dirs:[...], path:'<regex>' }` — flags files under `dirs` that *reference* a
+  forbidden path **in code** (imports / fs reads, not comment citations). Encodes a dependency-direction
+  invariant, e.g. "product (`test/`, `src/`) must not read process state (`coordination/`)". Catches the
+  product-depends-on-process smell.
+- **`time_bomb_tests`** `{ dirs:['test'] }` — flags tests that invoke git against a **frozen reference**
+  (a pinned commit SHA, `git diff <ref>..HEAD`, `--name-only` anti-scope diffs, `git show <sha>`
+  byte-identity). These can *only* rot — once HEAD moves past the round they fail regardless of product
+  correctness — so the discipline belongs in a round-aware **gate** (see `anti-scope-gate.sh`), not the
+  permanent suite. The signal requires *both* a git invocation and a frozen-ref marker, so a product
+  SHA-256 hash test that never touches git is not falsely flagged.
 
 ## Starter tenet library
 

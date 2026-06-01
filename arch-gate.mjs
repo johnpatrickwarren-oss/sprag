@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from '
 import { join, dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { isGeneratedFile, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount } from './metrics.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -193,77 +194,12 @@ function scopeOutOfBoundsCount(src, check, dir) {
   return n;
 }
 
-// Generated / build-artifact files are NOT authored source — exclude them so metrics reflect
-// hand-written code and stay DETERMINISTIC regardless of whether the tree has been built (otherwise
-// a `tsc` run that emits .js next to each .ts would double the counts and corrupt a ratchet baseline):
-//  - a .js/.cjs/.mjs/.jsx that has a .ts/.tsx sibling (tsc output)
-//  - a *.min / *.bundle / *.browser bundle
-//  - a .d.ts type-declaration file
-function isGeneratedFile(p) {
-  if (/\.d\.ts$/.test(p)) return true;
-  if (/\.(min|bundle|browser)\.(js|cjs|mjs|jsx)$/.test(p)) return true;
-  const m = p.match(/^(.*)\.(js|cjs|mjs|jsx)$/);
-  return !!m && (existsSync(m[1] + '.ts') || existsSync(m[1] + '.tsx'));
-}
-
-// oversized_files (generic, language-agnostic, no per-project tuning): count source files whose
-// line count exceeds maxLines — the "God file" smell. Recurses, skipping deps/vcs/generated.
-const SRC_EXTS = ['.go', '.ts', '.tsx', '.js', '.mjs', '.jsx', '.py', '.rs', '.java', '.rb', '.sh'];
-function oversizedFilesCount(dir, maxLines) {
-  if (!dir || !existsSync(dir)) return 0;
-  let n = 0;
-  const walk = (d) => {
-    for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
-      const p = join(d, name);
-      const st = statSync(p);
-      if (st.isDirectory()) { walk(p); continue; }
-      if (!SRC_EXTS.some((e) => name.endsWith(e)) || isGeneratedFile(p)) continue;
-      if (readFileSync(p, 'utf8').split('\n').length > maxLines) n++;
-    }
-  };
-  walk(dir);
-  return n;
-}
-
-// module_fanin (generic coupling): how many distinct files import each LOCAL module; flags hub
-// modules imported by more than maxFanin files — the k10s "everything depends on the God object"
-// smell. Relative-import based (JS/TS family); language-agnostic in spirit.
-const FANIN_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
-function moduleFaninCount(dir, maxFanin) {
-  if (!dir || !existsSync(dir)) return 0;
-  const files = [];
-  const walk = (d) => {
-    for (const n of readdirSync(d)) {
-      if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
-      const p = join(d, n);
-      if (statSync(p).isDirectory()) walk(p);
-      else if (FANIN_EXTS.some((e) => n.endsWith(e)) && !isGeneratedFile(p)) files.push(p);
-    }
-  };
-  walk(dir);
-  const fanin = new Map(); // resolved module key -> Set(importing file)
-  const importRe = /(?:\bfrom|\brequire\(\s*|\bimport\(\s*)\s*['"]([^'"]+)['"]/g;
-  for (const f of files) {
-    const src = readFileSync(f, 'utf8');
-    let m;
-    while ((m = importRe.exec(src))) {
-      const spec = m[1];
-      if (!spec.startsWith('.')) continue; // local relative imports only
-      const key = pathResolve(dirname(f), spec).replace(/\.(ts|tsx|js|mjs|cjs|jsx)$/, '');
-      (fanin.get(key) || fanin.set(key, new Set()).get(key)).add(f);
-    }
-  }
-  let n = 0;
-  for (const importers of fanin.values()) if (importers.size > maxFanin) n++;
-  return n;
-}
-
 // God-function detector, recursive + PER FILE: readSource() concatenates only the top-level dir, so
 // on a nested tree (e.g. packages/cli/src/) the concatenated path counts 0. This walks the tree and
 // parses each file on its own (the correct unit — concatenating mixed files into one parse is fragile),
 // summing functions whose line span exceeds maxLines. Suppression-aware via `anchor:allow <id>`.
-const FN_EXTS = { go: ['.go'], python: ['.py'], py: ['.py'], ts: FANIN_EXTS, js: FANIN_EXTS };
+const FN_JS_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
+const FN_EXTS = { go: ['.go'], python: ['.py'], py: ['.py'], ts: FN_JS_EXTS, js: FN_JS_EXTS };
 const FN_KINDS = {
   go: ['function_declaration', 'method_declaration', 'func_literal'],
   python: ['function_definition'], py: ['function_definition'],
@@ -302,6 +238,8 @@ function godFunctionCount(dir, maxLines, lang, invId) {
 export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'module_fanin') return moduleFaninCount(dir, inv.check.maxFanin);
   if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
+  if (inv.check.kind === 'forbid_path') return forbidPathRefCount(dir, inv.check, inv.id);
+  if (inv.check.kind === 'time_bomb_tests') return timeBombTestCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check, dir);
   // God-function check: prefer the recursive per-file walk when we have a dir (correct on nested
   // trees); fall back to the concatenated single-parse when only `src` is available.
