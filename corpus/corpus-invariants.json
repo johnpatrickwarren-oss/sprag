@@ -1,0 +1,7 @@
+[
+  { "id": "god-files", "intent": "no file >100 lines", "check": { "kind": "oversized_files", "maxLines": 100 }, "max": 0, "mode": "ratchet", "severity": "block" },
+  { "id": "god-functions", "intent": "no fn >30 lines", "check": { "kind": "max_function_lines", "maxLines": 30 }, "max": 0, "mode": "ratchet", "severity": "block", "lang": "ts", "engine": "ast-grep" },
+  { "id": "coupling-hub", "intent": "no module fan-in >2", "check": { "kind": "module_fanin", "maxFanin": 2 }, "max": 0, "mode": "ratchet", "severity": "block" },
+  { "id": "time-bomb-tests", "intent": "no frozen-ref tests", "check": { "kind": "time_bomb_tests", "dirs": ["test"] }, "max": 0, "mode": "ratchet", "severity": "block" },
+  { "id": "layering", "intent": "no product->process", "check": { "kind": "forbid_path", "dirs": ["test"], "path": "coordination/" }, "max": 0, "mode": "ratchet", "severity": "block" }
+]

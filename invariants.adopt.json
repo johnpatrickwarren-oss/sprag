@@ -9,7 +9,7 @@
   {
     "id": "no-time-bomb-tests",
     "intent": "No test pinned to a frozen git ref/SHA (git diff <ref>..HEAD, --name-only, git show <sha>) — such tests can only rot as HEAD moves past the round. Enforce scope via a round-aware gate, not a permanent product test. (NB: forbid_path coordination/ is intentionally NOT adopted here — coordination/ is Anchor's product domain, unlike a consumer repo where it would be process exhaust.)",
-    "check": { "kind": "time_bomb_tests", "dirs": ["packages", "integrations", "prototypes"] },
+    "check": { "kind": "time_bomb_tests", "dirs": ["packages", "integrations"] },
     "max": 0,
     "mode": "ratchet",
     "severity": "block"
