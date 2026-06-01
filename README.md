@@ -33,6 +33,32 @@ The **ratchet is the key idea**: it blocks the *13th* Model field, not the 30th 
 *trend* as it's introduced, which is what would have flagged k10s at commit ~20 instead of at
 collapse (commit 234). Demo: adding one `Model` field is blocked at 6→7, *before* the absolute max.
 
+## Wiring it in (the gate stops rot before it lands)
+
+Two integration points turn the checker into an enforcement gate:
+
+**Pre-commit hook** — blocks a commit that makes architecture worse than HEAD (ratchet vs the last
+commit), so rot can't land:
+```bash
+./install-hook.sh <repo-dir> <src-rel-path>     # writes <repo>/.git/hooks/pre-commit
+node test-precommit.mjs                          # proof: rot commit blocked + doesn't land; clean allowed
+```
+The hook computes the baseline from HEAD on each commit (no manual baseline upkeep). Bypass
+(discouraged) is `git commit --no-verify`.
+
+**AI-loop feedback gate** — runs the gate; on a block, feeds the violation back to a pluggable
+**fixer** and re-checks, until it passes or escalates:
+```bash
+node arch-loop.mjs <dir> --fixer "<cmd>" [--max-iters 3]
+node test-arch-loop.mjs                          # proof: converges on a good fixer, escalates on a stuck one
+```
+The fixer is a stub in tests; in real use it's a claude session (cwd = the code dir, reads
+`ARCH_GATE_FEEDBACK` / `.arch-feedback.md`) — reusing `prototypes/verification-harness`'s
+watchdog-wrapped session runner. **On escalation the loop does NOT relax the invariant** — a fixer
+that can't satisfy the gate means the change is genuinely incompatible with the architecture, which
+is a human call (the inverse of the behavioral harness's phantom problem: here a stuck loop means
+the *code* is wrong, not the invariant).
+
 ## Honest scope (P0)
 
 - Metric extraction is lightweight text/brace parsing of Go-flavored source — reliable on the small

@@ -67,23 +67,38 @@ function metricValue(inv, src) {
   }
 }
 
+// Flags:
+//   --baseline            compute <dir>'s metrics and write them as the baseline, then exit
+//   --baseline-out <file> where --baseline writes (default: baseline.json next to this script)
+//   --baseline-in <file>  baseline to check against (default: baseline.json)
+//   --json                emit machine-readable result (for the AI-loop / tooling)
 function main() {
-  const args = process.argv.slice(2);
-  const dir = args.find((a) => !a.startsWith('--'));
-  const writeBaseline = args.includes('--baseline');
-  if (!dir) { console.error('usage: arch-gate.mjs <dir> [--baseline]'); process.exit(64); }
+  const argv = process.argv.slice(2);
+  let dir = null, writeBaseline = false, baselineOut = null, baselineIn = null, json = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--baseline') writeBaseline = true;
+    else if (a === '--baseline-out') baselineOut = argv[++i];
+    else if (a === '--baseline-in') baselineIn = argv[++i];
+    else if (a === '--json') json = true;
+    else if (!a.startsWith('--')) dir = a;
+    else { console.error(`arch-gate: unknown arg ${a}`); process.exit(64); }
+  }
+  if (!dir) { console.error('usage: arch-gate.mjs <dir> [--baseline [--baseline-out f]] [--baseline-in f] [--json]'); process.exit(64); }
 
   const src = readSource(dir);
   const metrics = {};
   for (const inv of INVARIANTS) metrics[inv.id] = metricValue(inv, src);
 
   if (writeBaseline) {
-    writeFileSync(BASELINE_PATH, JSON.stringify(metrics, null, 2) + '\n');
-    console.log('baseline written:', JSON.stringify(metrics));
+    const out = baselineOut || BASELINE_PATH;
+    writeFileSync(out, JSON.stringify(metrics, null, 2) + '\n');
+    if (!json) console.log('baseline written:', JSON.stringify(metrics));
     process.exit(0);
   }
 
-  const baseline = existsSync(BASELINE_PATH) ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) : {};
+  const baselinePath = baselineIn || BASELINE_PATH;
+  const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {};
   const violations = [];
   for (const inv of INVARIANTS) {
     const v = metrics[inv.id];
@@ -92,7 +107,15 @@ function main() {
     if (inv.mode === 'ratchet' && typeof baseline[inv.id] === 'number' && v > baseline[inv.id]) {
       reasons.push(`regressed ${baseline[inv.id]} -> ${v} (ratchet: must not increase)`);
     }
-    if (reasons.length) violations.push({ inv, reasons });
+    if (reasons.length) {
+      violations.push({ id: inv.id, value: v, baseline: baseline[inv.id], reasons, intent: inv.intent, severity: inv.severity });
+    }
+  }
+  const blocked = violations.length > 0;
+
+  if (json) {
+    process.stdout.write(JSON.stringify({ dir, metrics, baseline, blocked, violations }, null, 2) + '\n');
+    process.exit(blocked ? 3 : 0);
   }
 
   console.log(`arch-gate: ${dir}`);
@@ -100,11 +123,11 @@ function main() {
     const b = baseline[inv.id];
     console.log(`  ${inv.id}: ${metrics[inv.id]}${typeof b === 'number' ? ` (baseline ${b})` : ''}`);
   }
-  if (!violations.length) { console.log('PASS: no architectural-invariant violations.'); process.exit(0); }
+  if (!blocked) { console.log('PASS: no architectural-invariant violations.'); process.exit(0); }
   console.log('\nBLOCKED — architectural invariant(s) violated:');
-  for (const { inv, reasons } of violations) {
-    console.log(`  ✗ [${inv.id}] ${reasons.join('; ')}`);
-    console.log(`      intent: ${inv.intent}`);
+  for (const vio of violations) {
+    console.log(`  ✗ [${vio.id}] ${vio.reasons.join('; ')}`);
+    console.log(`      intent: ${vio.intent}`);
   }
   process.exit(3);
 }
