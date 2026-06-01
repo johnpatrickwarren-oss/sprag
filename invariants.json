@@ -1,0 +1,25 @@
+[
+  {
+    "id": "model-not-god-object",
+    "intent": "Model stays a thin coordinator; per-view state lives in view structs, not here (Tenets 1 & 2).",
+    "check": { "kind": "struct_field_count", "struct": "Model" },
+    "max": 8,
+    "mode": "ratchet",
+    "severity": "block"
+  },
+  {
+    "id": "no-positional-rows",
+    "intent": "Rows are typed structs; never flatten to arrays accessed by magic integer indices like ra[3] (Tenet 4).",
+    "check": { "kind": "magic_index_count" },
+    "max": 0,
+    "mode": "ratchet",
+    "severity": "block"
+  },
+  {
+    "id": "bounded-dispatch",
+    "intent": "No growth of central per-view branching on view identity; views own behavior via the View interface (Tenet 2).",
+    "check": { "kind": "switch_case_count", "on": "m.view" },
+    "mode": "ratchet",
+    "severity": "block"
+  }
+]
