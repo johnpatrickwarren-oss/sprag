@@ -1,0 +1,14 @@
+[
+  {
+    "id": "no-god-files",
+    "intent": "No source file over 500 lines (God file) — split it.",
+    "check": { "kind": "oversized_files", "maxLines": 500 },
+    "mode": "ratchet", "severity": "block"
+  },
+  {
+    "id": "no-god-functions",
+    "intent": "No function over 60 lines (God function) — decompose it.",
+    "check": { "kind": "max_function_lines", "maxLines": 60 },
+    "mode": "ratchet", "severity": "block", "lang": "js", "engine": "ast-grep"
+  }
+]

@@ -28,7 +28,7 @@ const require = createRequire(import.meta.url);
 export const INVARIANTS = JSON.parse(readFileSync(join(HERE, 'invariants.json'), 'utf8'));
 const BASELINE_PATH = join(HERE, 'baseline.json');
 
-const EXT = { go: ['.go'], ts: ['.ts', '.tsx'], tsx: ['.ts', '.tsx'] };
+const EXT = { go: ['.go'], ts: ['.ts', '.tsx'], tsx: ['.ts', '.tsx'], js: ['.js', '.mjs', '.cjs', '.jsx'] };
 export function readSource(dir, lang = 'go') {
   if (!existsSync(dir)) return '';
   const exts = EXT[lang] || EXT.go;
@@ -120,6 +120,18 @@ function astgrepMetric(inv, src) {
     if (c.inside_kind) rule.inside = { kind: c.inside_kind, stopBy: 'end' };
     else if (c.inside) rule.inside = { pattern: c.inside, stopBy: 'end' };
     return root.findAll({ rule }).filter(notSuppressed).length;
+  }
+  if (c.kind === 'max_function_lines') {
+    // generic God-function detector (JS/TS): count functions whose line span exceeds maxLines.
+    const kinds = ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'];
+    let over = 0;
+    for (const k of kinds) {
+      for (const f of root.findAll({ rule: { kind: k } })) {
+        const r = f.range();
+        if ((r.end.line - r.start.line + 1) > c.maxLines && notSuppressed(f)) over++;
+      }
+    }
+    return over;
   }
   const isGo = (inv.lang || 'ts') === 'go';
   if (c.kind === 'struct_field_count') {
