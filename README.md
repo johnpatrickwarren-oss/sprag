@@ -1,11 +1,29 @@
-# Architectural-invariant gate — P0 prototype
+# Architectural-invariant gate
 
-The first build of the direction in `design/architectural-invariant-gate.md`: enforce
-**human-authored architectural invariants** as a **gate on every change**, ratcheted against a
-baseline, so AI-built codebases don't silently rot (the k10s failure mode:
-https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/).
+Enforce **human-authored architectural invariants** as a **gate on every change**, ratcheted against
+a baseline, so AI-built codebases don't silently rot (the k10s failure mode:
+https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/). Mechanical + deterministic (no model),
+so no oracle-quality ceiling and no "who-verifies-the-verifier" problem. Design:
+`design/architectural-invariant-gate.md`. The architectural analog of the behavioral
+`prototypes/verification-harness/`.
 
-This is the architectural analog of the behavioral `prototypes/verification-harness/test-gate.mjs`.
+## Adopt on your repo (ratchet from where you are)
+
+```bash
+npm install                                              # ast-grep engines
+# 1. pick invariants: copy entries from library/tenets.json into a my-invariants.json and tune,
+#    or start with the generic no-tuning checks (oversized_files, max_function_lines, module_fanin).
+# 2. record your CURRENT state as the accepted baseline (acknowledge existing debt):
+node arch-gate.mjs <src-dir> --invariants my-invariants.json --baseline --baseline-out my-baseline.json
+# 3. enforce — pre-commit (blocks new debt vs HEAD) and/or in the AI build loop:
+./install-hook.sh <repo-dir> <src-rel>                   # pre-commit gate
+node arch-loop.mjs <src-dir> --fixer "<your builder cmd>" # AI-loop feedback gate
+# see the debt trend over history:
+node arch-trend.mjs <repo> <src-rel> --invariants my-invariants.json
+```
+
+The ratchet means you don't need perfect thresholds up front: start from your current state, and the
+gate refuses to make it worse.
 
 ## Run
 
