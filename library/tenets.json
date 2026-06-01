@@ -69,7 +69,7 @@
       "engines": [
         "ast-grep (TS): a property assignment inside a timer/async callback"
       ],
-      "tune": "Set `inside` to your async entrypoints (setInterval/setTimeout/queueMicrotask/worker.onmessage); `pattern` to the forbidden mutation. Go-via-ast-grep (`go func(){ $O.$F = $V }`) needs @ast-grep/lang-go (follow-up)."
+      "tune": "Set `inside` to your async entrypoints (setInterval/setTimeout/queueMicrotask/worker.onmessage); `pattern` to the forbidden mutation. Go is supported via @ast-grep/lang-go using inside_kind: go_statement (the heuristic engine cannot express this)."
     },
     {
       "tenet": "T3 — Explicit scope boundary; fight scope creep",

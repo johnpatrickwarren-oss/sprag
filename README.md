@@ -96,7 +96,7 @@ node test-arch-gate-ts.mjs                                   # proof: real-AST g
 node arch-gate.mjs sample-ts --invariants invariants.ts.json --baseline   # then check vs it
 ```
 Adding a language = a parser adapter in `arch-gate.mjs` (go/ast, more ast-grep langs, semgrep), not
-new gate logic. Go via real AST is a follow-up (`@ast-grep/lang-go`); the heuristic engine covers it today.
+new gate logic. Go also runs on real AST via `@ast-grep/lang-go` (incl. goroutine-mutation / T5); the heuristic engine remains a no-dep fallback.
 
 ## Starter tenet library
 

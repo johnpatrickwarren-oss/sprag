@@ -92,11 +92,14 @@ function heuristicMetric(inv, src) {
 }
 
 // ── ast-grep engine (real AST; TypeScript/JS via @ast-grep/napi) ────────────────
-let _sg = null;
+let _sg = null, _goRegistered = false;
 function sgRoot(src, lang) {
   if (!_sg) _sg = require('@ast-grep/napi');
-  const l = lang === 'ts' || lang === 'tsx' ? 'Tsx' : lang;
-  return _sg.parse(l, src).root();
+  if (lang === 'go') {
+    if (!_goRegistered) { _sg.registerDynamicLanguage({ go: require('@ast-grep/lang-go') }); _goRegistered = true; }
+    return _sg.parse('go', src).root();
+  }
+  return _sg.parse('Tsx', src).root();
 }
 function astgrepMetric(inv, src) {
   const c = inv.check;
@@ -111,21 +114,28 @@ function astgrepMetric(inv, src) {
       .filter(notSuppressed).length;
   }
   if (c.kind === 'forbid_pattern') {
-    // author-supplied structural rule: a `pattern`, optionally only when `inside` another pattern.
+    // author-supplied structural rule: a `pattern`, optionally only when `inside` another node
+    // (by `inside` pattern or `inside_kind` node kind, e.g. go_statement for "inside a goroutine").
     const rule = { pattern: c.pattern };
-    if (c.inside) rule.inside = { pattern: c.inside, stopBy: 'end' };
+    if (c.inside_kind) rule.inside = { kind: c.inside_kind, stopBy: 'end' };
+    else if (c.inside) rule.inside = { pattern: c.inside, stopBy: 'end' };
     return root.findAll({ rule }).filter(notSuppressed).length;
   }
+  const isGo = (inv.lang || 'ts') === 'go';
   if (c.kind === 'struct_field_count') {
+    if (isGo) {
+      const st = root.find(`type ${c.struct} struct { $$$ }`);
+      return st ? st.findAll({ rule: { kind: 'field_declaration' } }).length : 0;
+    }
     const cls = root.find(`class ${c.struct} { $$$ }`) || root.find(`interface ${c.struct} { $$$ }`);
     if (!cls) return 0;
     return cls.findAll({ rule: { kind: 'public_field_definition' } }).length
       + cls.findAll({ rule: { kind: 'property_signature' } }).length;
   }
   if (c.kind === 'switch_case_count') {
-    const sw = root.findAll({ rule: { kind: 'switch_statement' } });
+    const sw = root.findAll({ rule: { kind: isGo ? 'expression_switch_statement' : 'switch_statement' } });
     if (!sw.length) return 0;
-    return sw[0].findAll({ rule: { kind: 'switch_case' } }).length;
+    return sw[0].findAll({ rule: { kind: isGo ? 'expression_case' : 'switch_case' } }).length;
   }
   throw new Error(`ast-grep: unknown check kind ${c.kind}`);
 }
