@@ -9,23 +9,26 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { INVARIANTS, readSource, metricValue } from './arch-gate.mjs';
 
 function parse(argv) {
-  let repo = null, srcRel = null, last = 20, json = false;
+  let repo = null, srcRel = null, last = 20, json = false, invFile = null;
   const pos = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--last') last = parseInt(argv[++i], 10);
+    else if (a === '--invariants') invFile = argv[++i];
     else if (a === '--json') json = true;
     else if (!a.startsWith('--')) pos.push(a);
     else { console.error(`arch-trend: unknown arg ${a}`); process.exit(64); }
   }
   [repo, srcRel] = pos;
-  return { repo, srcRel, last, json };
+  return { repo, srcRel, last, json, invFile };
 }
 
-const { repo, srcRel, last, json } = parse(process.argv.slice(2));
+const { repo, srcRel, last, json, invFile } = parse(process.argv.slice(2));
+const INVS = invFile ? JSON.parse(readFileSync(invFile, 'utf8')) : INVARIANTS;
 if (!repo || !srcRel) { console.error('usage: arch-trend.mjs <repo> <src-rel> [--last N] [--json]'); process.exit(64); }
 
 const shas = spawnSync('git', ['-C', repo, 'rev-list', '--reverse', `--max-count=${last}`, 'HEAD'], { encoding: 'utf8' })
@@ -40,15 +43,15 @@ for (const sha of shas) {
     const srcDir = join(tmp, srcRel);
     const subj = spawnSync('git', ['-C', repo, 'log', '-1', '--format=%s', sha], { encoding: 'utf8' }).stdout.trim();
     const metrics = {};
-    for (const inv of INVARIANTS) metrics[inv.id] = metricValue(inv, readSource(srcDir, inv.lang || 'go'), srcDir);
+    for (const inv of INVS) metrics[inv.id] = metricValue(inv, readSource(srcDir, inv.lang || 'go'), srcDir);
     rows.push({ sha: sha.slice(0, 7), subj, metrics });
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
-if (json) { process.stdout.write(JSON.stringify({ invariants: INVARIANTS.map((i) => i.id), rows }, null, 2) + '\n'); process.exit(0); }
+if (json) { process.stdout.write(JSON.stringify({ invariants: INVS.map((i) => i.id), rows }, null, 2) + '\n'); process.exit(0); }
 
 // table
-const ids = INVARIANTS.map((i) => i.id);
+const ids = INVS.map((i) => i.id);
 console.log('architectural-debt trend (oldest -> newest):\n');
 console.log(['commit '.padEnd(9), ...ids.map((id) => id.slice(0, 20).padStart(22))].join(''));
 for (const r of rows) {
@@ -56,7 +59,7 @@ for (const r of rows) {
 }
 // first-breach flags
 console.log('\nfirst breach of absolute max:');
-for (const inv of INVARIANTS) {
+for (const inv of INVS) {
   if (typeof inv.max !== 'number') { console.log(`  ${inv.id}: (ratchet-only, no absolute max)`); continue; }
   const hit = rows.find((r) => r.metrics[inv.id] > inv.max);
   console.log(`  ${inv.id} (max ${inv.max}): ${hit ? `BREACHED at ${hit.sha} "${hit.subj}"` : 'never breached'}`);
