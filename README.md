@@ -100,19 +100,20 @@ new gate logic. Go also runs on real AST via `@ast-grep/lang-go` (incl. goroutin
 
 ## Starter tenet library
 
-`library/tenets.json` ships the article's 5 tenets as ready-to-enable invariants (3 implemented, 2
-planned). Copy the ones you want into your `invariants.json` and tune. See `library/README.md`.
+`library/tenets.json` ships the article's **all 5 tenets** as ready-to-enable invariants (T1–T5, all
+implemented). Copy the ones you want into your `invariants.json` and tune. See `library/README.md`.
 
 ## Honest scope
 
 - Mechanical + deterministic (no model) → no "who-verifies-the-verifier" problem; invariants are
   human-authored (the article's Tenet 1).
-- The heuristic (Go) engine is sample-grade text parsing; the ast-grep (TS) engine is real AST.
-  Production would add go/ast + more ast-grep/semgrep rules behind the same adapter seam.
-- Remaining (design §12): `forbid_pattern` (T5 goroutine-mutation) + `scope_diff` (T3) check kinds;
-  Go-via-ast-grep; then point it at a real GROWING repo.
+- Real AST on **Go and TypeScript** via ast-grep (`@ast-grep/napi` + `@ast-grep/lang-go`); the
+  heuristic Go engine remains a no-dep fallback. More languages = a parser adapter, not new gate logic.
+- `oversized_files` is a generic, language-agnostic check (no per-project tuning) for "God files".
+- Remaining (design §12): more generic metrics; richer `scope_diff`; broader real-repo trials.
 
 ## Tests (all self-contained)
 
-`test-arch-gate.mjs` (gate+ratchet) · `test-precommit.mjs` (hook) · `test-arch-loop.mjs` (AI-loop) ·
-`test-arch-trend.mjs` (debt trend) · `test-arch-gate-ts.mjs` (real-AST multi-language).
+`test-arch-gate.mjs` (gate+ratchet+scope) · `test-precommit.mjs` (hook) · `test-arch-loop.mjs`
+(AI-loop) · `test-arch-trend.mjs` (debt trend) · `test-arch-gate-ts.mjs` (real-AST TypeScript) ·
+`test-arch-gate-go-ast.mjs` (real-AST Go incl. goroutine-mutation).

@@ -37,10 +37,10 @@ for (const sha of shas) {
   const tmp = mkdtempSync(join(tmpdir(), 'arch-trend-'));
   try {
     spawnSync('bash', ['-c', `git -C "${repo}" archive ${sha} | tar -x -C "${tmp}"`]);
-    const src = readSource(join(tmp, srcRel));
+    const srcDir = join(tmp, srcRel);
     const subj = spawnSync('git', ['-C', repo, 'log', '-1', '--format=%s', sha], { encoding: 'utf8' }).stdout.trim();
     const metrics = {};
-    for (const inv of INVARIANTS) metrics[inv.id] = metricValue(inv, src);
+    for (const inv of INVARIANTS) metrics[inv.id] = metricValue(inv, readSource(srcDir, inv.lang || 'go'), srcDir);
     rows.push({ sha: sha.slice(0, 7), subj, metrics });
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }

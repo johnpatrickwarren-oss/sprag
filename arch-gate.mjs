@@ -18,7 +18,7 @@
 // (auditable escape hatch, not silent). Metric/ratchet invariants are "suppressed" by
 // deliberately re-recording the baseline.
 
-import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -149,7 +149,28 @@ function scopeOutOfBoundsCount(src, allowed) {
   return labels.filter((l) => !set.has(l)).length;
 }
 
-export function metricValue(inv, src) {
+// oversized_files (generic, language-agnostic, no per-project tuning): count source files whose
+// line count exceeds maxLines — the "God file" smell. Recurses, skipping deps/vcs.
+const SRC_EXTS = ['.go', '.ts', '.tsx', '.js', '.mjs', '.jsx', '.py', '.rs', '.java', '.rb', '.sh'];
+function oversizedFilesCount(dir, maxLines) {
+  if (!dir || !existsSync(dir)) return 0;
+  let n = 0;
+  const walk = (d) => {
+    for (const name of readdirSync(d)) {
+      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      const p = join(d, name);
+      const st = statSync(p);
+      if (st.isDirectory()) { walk(p); continue; }
+      if (!SRC_EXTS.some((e) => name.endsWith(e))) continue;
+      if (readFileSync(p, 'utf8').split('\n').length > maxLines) n++;
+    }
+  };
+  walk(dir);
+  return n;
+}
+
+export function metricValue(inv, src, dir) {
+  if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check.allowed);
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
@@ -174,7 +195,7 @@ function main() {
   const getSrc = (lang) => (srcByLang[lang] ??= readSource(dir, lang));
 
   const metrics = {};
-  for (const inv of invariants) metrics[inv.id] = metricValue(inv, getSrc(inv.lang || 'go'));
+  for (const inv of invariants) metrics[inv.id] = metricValue(inv, getSrc(inv.lang || 'go'), dir);
 
   if (writeBaseline) {
     const out = baselineOut || BASELINE_PATH;

@@ -1,0 +1,10 @@
+[
+  {
+    "id": "no-god-files",
+    "intent": "No God files: a source file over 800 lines is doing too much — split it (the k10s God-object lesson applied at file granularity). Language-agnostic, no per-project tuning.",
+    "check": { "kind": "oversized_files", "maxLines": 800 },
+    "max": 0,
+    "mode": "ratchet",
+    "severity": "block"
+  }
+]
