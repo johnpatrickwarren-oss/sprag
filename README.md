@@ -100,21 +100,17 @@ Walks git history, computes each invariant's metric at every commit, prints the 
 where each invariant first breaches its max. This makes accumulating rot **visible early** — the
 article's author only discovered it at collapse because velocity hid the trend.
 
-## Engines & multi-language
+## Engines, languages & extensibility
 
 Checks are computed by a per-invariant **engine** (`engine` + `lang` fields):
-- **`heuristic`** (default) — lightweight text/brace parsing of Go-flavored source, no deps.
-- **`ast-grep`** — **real multi-language AST** via `@ast-grep/napi` (TypeScript/JS here).
+- **`ast-grep`** — **real AST** via `@ast-grep/napi` (+ `@ast-grep/lang-go`, `@ast-grep/lang-python`):
+  **Go, TypeScript/JS, and Python**. Adding a language is a small parser adapter, not new gate logic.
+- **`heuristic`** (default) — lightweight text/brace parsing of Go-flavored source, no deps (fallback).
 
-So one setup gates multiple languages: the Go invariants run on the heuristic engine; the TS
-invariants (`invariants.ts.json` against `sample-ts/`) run on a genuine TS AST.
-```bash
-npm install                                                  # @ast-grep/napi (for the ast-grep engine)
-node test-arch-gate-ts.mjs                                   # proof: real-AST gate enforces the tenets on TypeScript
-node arch-gate.mjs sample-ts --invariants invariants.ts.json --baseline   # then check vs it
-```
-Adding a language = a parser adapter in `arch-gate.mjs` (go/ast, more ast-grep langs, semgrep), not
-new gate logic. Go also runs on real AST via `@ast-grep/lang-go` (incl. goroutine-mutation / T5); the heuristic engine remains a no-dep fallback.
+Built-in check kinds: `struct_field_count`, `switch_case_count`, `magic_index_count`, `forbid_pattern`,
+`oversized_files`, `max_function_lines`, `module_fanin`, `scope_diff`. For anything bespoke, the
+**`ast_grep_rule`** kind takes a raw ast-grep rule object, so a project can encode its *own*
+architectural rules in JSON with no code changes.
 
 ## Starter tenet library
 
@@ -132,8 +128,10 @@ implemented). Copy the ones you want into your `invariants.json` and tune. See `
   on the God object" coupling smell).
 - Remaining (design §12): more generic metrics; richer `scope_diff`; broader real-repo trials.
 
-## Tests (all self-contained)
+## Tests
 
-`test-arch-gate.mjs` (gate+ratchet+scope) · `test-precommit.mjs` (hook) · `test-arch-loop.mjs`
-(AI-loop) · `test-arch-trend.mjs` (debt trend) · `test-arch-gate-ts.mjs` (real-AST TypeScript) ·
-`test-arch-gate-go-ast.mjs` (real-AST Go incl. goroutine-mutation).
+**`npm test` → 14 self-contained suites**, covering: gate+ratchet+scope, pre-commit hook, AI-loop
+(converge/escalate), debt-trend, the generic God-file/God-function/fan-in checks, the custom
+`ast_grep_rule` DSL, `init` scaffolding, real-AST on TypeScript / Go (incl. goroutine-mutation) /
+Python, scope-dirs, and a **dogfood** suite that runs the gate on its own source (the tool has no God
+files/functions/hubs by its own checks).
