@@ -1,0 +1,9 @@
+[
+  {
+    "id": "no-new-god-files",
+    "intent": "No NEW source file over 800 lines. Existing God files are grandfathered by the ratchet baseline (HEAD); this stops new ones. Shrinking an existing God file tightens the ratchet.",
+    "check": { "kind": "oversized_files", "maxLines": 800 },
+    "mode": "ratchet",
+    "severity": "block"
+  }
+]
