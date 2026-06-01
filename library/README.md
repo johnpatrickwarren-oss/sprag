@@ -1,9 +1,10 @@
 # Starter tenet library
 
 Ready-to-enable architectural invariants: the **5 structural tenets** from the k10s post ("I'm Going
-Back to Writing Code by Hand") plus **2 layering/test-rot invariants** (L1–L2) learned from adopting
-this gate on real repos. `tenets.json` is the catalog; copy the entries you want into your project's
-`invariants.json` and **tune** them (the human still owns the architecture — the gate only enforces it).
+Back to Writing Code by Hand"), **2 layering/test-rot invariants** (L1–L2), and **1 discipline-derived
+check** (D1) — learned from adopting this gate on real repos + the engineering disciplines it pairs
+with. `tenets.json` is the catalog; copy the entries you want into your project's `invariants.json` and
+**tune** them (the human still owns the architecture — the gate only enforces it).
 
 | Tenet | Invariant | Check | Status |
 |---|---|---|---|
@@ -14,13 +15,17 @@ this gate on real repos. `tenets.json` is the catalog; copy the entries you want
 | T3 — explicit scope boundary (no scope creep) | `scope-boundary` | `scope_diff` | **ready** |
 | L1 — layering: product mustn't depend on process/working-state | `product-not-read-process` | `forbid_path` | **ready** |
 | L2 — no time-bomb tests (tests that can only rot) | `no-time-bomb-tests` | `time_bomb_tests` | **ready** |
+| D1 — test coverage floor (the TDD shadow) | `require-tests` | `require_tests` | **ready** |
 
 T1–T5 catch **structural** decay (size, coupling, dispatch, mutation, scope). L1–L2 catch
-**layering / dependency-direction** decay — a class the size/coupling metrics are blind to:
+**layering / dependency-direction** decay; D1 catches **missing test coverage** — classes the
+size/coupling metrics are blind to:
 - **L1** is *per-project* — only forbid a path that is genuinely a different layer (on the orchestrator
   repo that owns `coordination/`, you would NOT adopt it). Authored to each repo's architecture.
 - **L2** is *universal* — no product should pin a test to a frozen git ref; round-scoped checks belong
   in a gate, not the permanent suite. Usually adopt as-is.
+- **D1** is the deterministic half of test-driven-development (the behavioral half ships in
+  `disciplines.md`) — ratchet it so legacy untested code is grandfathered and only NEW modules need a test.
 
 **ready** = implemented check kind (works today on Go via the heuristic engine and TypeScript via the
 ast-grep AST engine). **planned** = the check kind is on the roadmap (design §4); the template shows

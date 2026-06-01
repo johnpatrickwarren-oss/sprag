@@ -1,5 +1,5 @@
 {
-  "about": "Starter library of ready-to-enable architectural invariants: the 5 structural tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ (T1–T5) PLUS 2 layering/test-rot invariants (L1–L2) learned from adopting this gate on real repos — a class of decay the size/coupling metrics are blind to. Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols/paths to your codebase. 'status: ready' = implemented check kind; 'status: planned' = on the roadmap (design §4), template shows the intended shape.",
+  "about": "Starter library of ready-to-enable architectural invariants: the 5 structural tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ (T1–T5), 2 layering/test-rot invariants (L1–L2), and 1 discipline-derived check (D1) — the latter learned from adopting this gate on real repos + the engineering disciplines it pairs with (a class of decay the size/coupling metrics are blind to). Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols/paths to your codebase. 'status: ready' = implemented check kind; 'status: planned' = on the roadmap (design §4), template shows the intended shape.",
   "tenets": [
     {
       "tenet": "T1 — Architecture is yours; the coordinator stays thin",
@@ -123,6 +123,22 @@
         "language-agnostic: flags test files (*.test.* / *.spec.*) that BOTH invoke git AND carry a frozen-ref marker (so a product SHA-256 hash test that never touches git is not flagged)"
       ],
       "tune": "Universal (no product should pin a frozen ref) — usually adopt as-is. Set `dirs` to your test roots. Suppress a deliberate, maintained case with `// anchor:allow no-time-bomb-tests: <reason>`."
+    },
+    {
+      "tenet": "D1 — Test coverage floor (the TDD shadow)",
+      "status": "ready",
+      "id": "require-tests",
+      "intent": "Every source module ships with a test. This is the deterministic shadow of test-driven-development: it can't prove a test was written FIRST, but it enforces TDD's durable outcome — no untested code lands. Matched by base name, layout-agnostic (foo.ts ↔ foo.{test,spec}.* | foo_test.go | test_foo.py | foo_test.py, anywhere in the tree).",
+      "check": {
+        "kind": "require_tests",
+        "dirs": ["src"]
+      },
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "language-agnostic: counts source files (.ts/.tsx/.js/.mjs/.cjs/.jsx/.go/.py) under `dirs` with no base-name-matching test; excludes the tests themselves, generated artifacts, and barrel index.* files"
+      ],
+      "tune": "Set `dirs` to your source roots. Keep `ratchet` (no absolute `max`) so today's untested/legacy files are grandfathered and only NEW untested modules block — set `max: 0` only on a greenfield repo you want fully covered. Override the barrel exclusion with `exclude` (regex on the relative path); suppress a deliberate exception with `// anchor:allow require-tests: <reason>`. Pairs with the test-driven-development discipline in `disciplines.md`."
     }
   ]
 }
