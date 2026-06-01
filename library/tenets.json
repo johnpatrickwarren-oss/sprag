@@ -33,13 +33,13 @@
     },
     {
       "tenet": "T5 — Mutations on the main loop; workers send messages",
-      "status": "planned",
-      "id": "no-mutation-in-goroutine",
+      "status": "ready",
+      "id": "no-async-mutation",
       "intent": "Background workers must NOT mutate shared state directly (the k10s data race: goroutines writing Model fields with no mutex). They send messages; the main loop mutates.",
-      "check": { "kind": "forbid_pattern", "engine_rule": "field assignment inside a `go func(){...}` (Go) / inside an async worker callback (TS)" },
-      "severity": "block",
-      "engines": ["ast-grep (planned: pattern `go func() { $$$; $RECV.$F = $X; $$$ }`)"],
-      "tune": "Planned check kind (design §4 forbid-pattern). Until then, approximate with a semgrep/ast-grep rule in CI."
+      "check": { "kind": "forbid_pattern", "pattern": "$O.$F = $V", "inside": "setInterval($$$)" },
+      "max": 0, "mode": "ratchet", "severity": "block",
+      "engines": ["ast-grep (TS): a property assignment inside a timer/async callback"],
+      "tune": "Set `inside` to your async entrypoints (setInterval/setTimeout/queueMicrotask/worker.onmessage); `pattern` to the forbidden mutation. Go-via-ast-grep (`go func(){ $O.$F = $V }`) needs @ast-grep/lang-go (follow-up)."
     },
     {
       "tenet": "T3 — Explicit scope boundary; fight scope creep",

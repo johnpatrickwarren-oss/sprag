@@ -1,5 +1,6 @@
 {
   "model-not-god-object": 5,
   "no-positional-rows": 0,
-  "bounded-dispatch": 2
+  "bounded-dispatch": 2,
+  "no-async-mutation": 0
 }

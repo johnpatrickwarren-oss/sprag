@@ -27,5 +27,15 @@
     "severity": "block",
     "lang": "ts",
     "engine": "ast-grep"
+  },
+  {
+    "id": "no-async-mutation",
+    "intent": "Background workers send messages; they never mutate shared state directly inside a timer/async callback (Tenet 5: the k10s goroutine data race).",
+    "check": { "kind": "forbid_pattern", "pattern": "$O.$F = $V", "inside": "setInterval($$$)" },
+    "max": 0,
+    "mode": "ratchet",
+    "severity": "block",
+    "lang": "ts",
+    "engine": "ast-grep"
   }
 ]

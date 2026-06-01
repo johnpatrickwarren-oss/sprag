@@ -72,20 +72,22 @@ function h_switchCaseCount(src, onExpr) {
   if (body == null) return 0;
   return (body.match(/\bcase\b/g) || []).length;
 }
-function h_magicIndexCount(src) {
+function h_magicIndexCount(src, suppressId) {
+  const re = suppressId && new RegExp(`anchor:allow\\s+${suppressId}\\b`);
   let n = 0;
   for (const line of src.split('\n')) {
-    if (/anchor:allow\s+no-positional-rows\b/.test(line)) continue;
+    if (re && re.test(line)) continue;
     n += (line.match(/\b[A-Za-z_]\w*\[\d+\]/g) || []).length;
   }
   return n;
 }
-function heuristicMetric(check, src) {
-  switch (check.kind) {
-    case 'struct_field_count': return h_structFieldCount(src, check.struct);
-    case 'switch_case_count': return h_switchCaseCount(src, check.on);
-    case 'magic_index_count': return h_magicIndexCount(src);
-    default: throw new Error(`heuristic: unknown check kind ${check.kind}`);
+function heuristicMetric(inv, src) {
+  const c = inv.check;
+  switch (c.kind) {
+    case 'struct_field_count': return h_structFieldCount(src, c.struct);
+    case 'switch_case_count': return h_switchCaseCount(src, c.on);
+    case 'magic_index_count': return h_magicIndexCount(src, inv.id);
+    default: throw new Error(`heuristic: unknown check kind ${c.kind} (try engine: ast-grep)`);
   }
 }
 
@@ -96,33 +98,40 @@ function sgRoot(src, lang) {
   const l = lang === 'ts' || lang === 'tsx' ? 'Tsx' : lang;
   return _sg.parse(l, src).root();
 }
-function astgrepMetric(check, src, lang) {
-  const root = sgRoot(src, lang);
-  if (check.kind === 'magic_index_count') {
-    const lines = src.split('\n');
+function astgrepMetric(inv, src) {
+  const c = inv.check;
+  const root = sgRoot(src, inv.lang || 'ts');
+  const lines = src.split('\n');
+  const supRe = inv.id && new RegExp(`anchor:allow\\s+${inv.id}\\b`);
+  const notSuppressed = (n) => !(supRe && supRe.test(lines[n.range().start.line] || ''));
+
+  if (c.kind === 'magic_index_count') {
     return root.findAll('$A[$N]')
       .filter((n) => /^\d+$/.test(n.getMatch('N')?.text() ?? ''))
-      .filter((n) => !/anchor:allow\s+no-positional-rows\b/.test(lines[n.range().start.line] || ''))
-      .length;
+      .filter(notSuppressed).length;
   }
-  if (check.kind === 'struct_field_count') {
-    const cls = root.find(`class ${check.struct} { $$$ }`) || root.find(`interface ${check.struct} { $$$ }`);
+  if (c.kind === 'forbid_pattern') {
+    // author-supplied structural rule: a `pattern`, optionally only when `inside` another pattern.
+    const rule = { pattern: c.pattern };
+    if (c.inside) rule.inside = { pattern: c.inside, stopBy: 'end' };
+    return root.findAll({ rule }).filter(notSuppressed).length;
+  }
+  if (c.kind === 'struct_field_count') {
+    const cls = root.find(`class ${c.struct} { $$$ }`) || root.find(`interface ${c.struct} { $$$ }`);
     if (!cls) return 0;
     return cls.findAll({ rule: { kind: 'public_field_definition' } }).length
       + cls.findAll({ rule: { kind: 'property_signature' } }).length;
   }
-  if (check.kind === 'switch_case_count') {
+  if (c.kind === 'switch_case_count') {
     const sw = root.findAll({ rule: { kind: 'switch_statement' } });
     if (!sw.length) return 0;
     return sw[0].findAll({ rule: { kind: 'switch_case' } }).length;
   }
-  throw new Error(`ast-grep: unknown check kind ${check.kind}`);
+  throw new Error(`ast-grep: unknown check kind ${c.kind}`);
 }
 
 export function metricValue(inv, src) {
-  const engine = inv.engine || 'heuristic';
-  if (engine === 'ast-grep') return astgrepMetric(inv.check, src, inv.lang || 'ts');
-  return heuristicMetric(inv.check, src);
+  return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
 
 function main() {

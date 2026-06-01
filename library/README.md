@@ -10,7 +10,7 @@ enforces it).
 | T1 — thin coordinator (no God Object) | `model-not-god-object` | `struct_field_count` (ratchet) | **ready** |
 | T2 — per-view isolation (no central dispatch growth) | `bounded-dispatch` | `switch_case_count` (ratchet) | **ready** |
 | T4 — typed records (no positional arrays) | `no-positional-rows` | `magic_index_count` | **ready** |
-| T5 — mutations on the main loop (no goroutine writes) | `no-mutation-in-goroutine` | `forbid_pattern` | planned |
+| T5 — mutations on the main loop (no async-callback writes) | `no-async-mutation` | `forbid_pattern` | **ready** |
 | T3 — explicit scope boundary (no scope creep) | `scope-boundary` | `scope_diff` | planned |
 
 **ready** = implemented check kind (works today on Go via the heuristic engine and TypeScript via the

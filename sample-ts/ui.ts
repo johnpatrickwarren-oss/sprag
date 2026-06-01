@@ -21,6 +21,13 @@ export interface View {
 }
 export interface Msg {}
 
+// Background workers SEND MESSAGES; they never mutate Model directly (Tenet 5: no data races).
+export function startWorker(send: (m: Msg) => void): void {
+  setInterval(() => {
+    send({});
+  }, 1000);
+}
+
 // Dispatch stays BOUNDED (Tenet 2): new views plug in via the View interface, not new cases.
 export function update(m: Model, msg: Msg): void {
   switch (m.view) {

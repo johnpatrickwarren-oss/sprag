@@ -40,5 +40,10 @@ spawnSync('node', [GATE, SAMPLE, '--invariants', INV, '--baseline', '--baseline-
   const r = gate(tsWith(go));
   expect('TS rot: +dispatch case  BLOCKED on bounded-dispatch', r.code === 3 && /bounded-dispatch/.test(r.out), `exit ${r.code}: ${r.out}`); }
 
+{ // T5: mutation inside a setInterval callback (the k10s data-race) — forbid_pattern
+  const go = CLEAN.replace('    send({});', '    m.view = "x";');
+  const r = gate(tsWith(go));
+  expect('TS rot: mutation in async callback  BLOCKED on no-async-mutation', r.code === 3 && /no-async-mutation/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
 console.log(failed === 0 ? '\nPASS: real-AST (ast-grep) gate enforces the tenets on TypeScript too ✅' : `\nFAIL: ${failed} case(s)`);
 process.exit(failed ? 1 : 0);
