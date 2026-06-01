@@ -122,8 +122,10 @@ function astgrepMetric(inv, src) {
     return root.findAll({ rule }).filter(notSuppressed).length;
   }
   if (c.kind === 'max_function_lines') {
-    // generic God-function detector (JS/TS): count functions whose line span exceeds maxLines.
-    const kinds = ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'];
+    // generic God-function detector: count functions whose line span exceeds maxLines (lang-aware).
+    const kinds = (inv.lang || 'ts') === 'go'
+      ? ['function_declaration', 'method_declaration', 'func_literal']
+      : ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'];
     let over = 0;
     for (const k of kinds) {
       for (const f of root.findAll({ rule: { kind: k } })) {

@@ -34,5 +34,11 @@ spawnSync('node', [GATE, SAMPLE, '--invariants', INV, '--baseline', '--baseline-
   const r = gate(goWith(go));
   expect('Go rot: mutation in goroutine  BLOCKED on no-goroutine-mutation', r.code === 3 && /✗ \[no-goroutine-mutation\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
 
+{ // Go God-function: a 40-line function -> blocked (real AST line-span)
+  const big = "\nfunc bloated() {\n" + Array.from({length:40},(_,i)=>`\tv${i} := ${i}`).join("\n") + "\n}\n";
+  const go = CLEAN + big;
+  const r = gate(goWith(go));
+  expect('Go rot: 40-line function  BLOCKED on no-god-functions', r.code === 3 && /✗ \[no-god-functions\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
 console.log(failed === 0 ? '\nPASS: real Go AST (ast-grep/lang-go) enforces the tenets incl. goroutine-mutation ✅' : `\nFAIL: ${failed} case(s)`);
 process.exit(failed ? 1 : 0);
