@@ -125,7 +125,7 @@ implemented). Copy the ones you want into your `invariants.json` and tune. See `
 
 - Mechanical + deterministic (no model) → no "who-verifies-the-verifier" problem; invariants are
   human-authored (the article's Tenet 1).
-- Real AST on **Go and TypeScript** via ast-grep (`@ast-grep/napi` + `@ast-grep/lang-go`); the
+- Real AST on **Go, TypeScript/JS, and Python** via ast-grep (`@ast-grep/napi` + `@ast-grep/lang-go` + `@ast-grep/lang-python`); the
   heuristic Go engine remains a no-dep fallback. More languages = a parser adapter, not new gate logic.
 - Generic, no-tuning checks (work on any repo): `oversized_files` (God file), `max_function_lines`
   (God function), `module_fanin` (a module imported by too many files — the k10s "everything depends

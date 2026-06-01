@@ -1,8 +1,14 @@
 {
-  "name": "anchor-architectural-gate",
+  "name": "@anchor/arch-gate",
+  "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "P0/P1 architectural-invariant gate prototype",
+  "description": "Enforce human-authored architectural invariants as a ratcheted gate on every change — so AI-built codebases don't silently rot (the k10s failure mode). Real-AST (ast-grep) for Go/TS/JS/Python + a heuristic fallback; pre-commit + AI-loop + debt-trend.",
+  "keywords": ["architecture", "lint", "ast-grep", "pre-commit", "code-quality", "ai-codegen", "technical-debt", "god-object"],
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "bin": { "arch-gate": "./arch.mjs" },
+  "files": ["arch.mjs", "arch-gate.mjs", "arch-trend.mjs", "arch-loop.mjs", "install-hook.sh", "invariants.json", "library/", "README.md"],
   "dependencies": {
     "@ast-grep/lang-go": "^0.0.6",
     "@ast-grep/lang-python": "^0.0.6",
@@ -12,8 +18,5 @@
     "test": "node run-tests.mjs",
     "gate": "node arch-gate.mjs",
     "arch": "node arch.mjs"
-  },
-  "bin": {
-    "arch": "./arch.mjs"
   }
 }
