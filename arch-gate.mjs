@@ -121,6 +121,12 @@ function astgrepMetric(inv, src) {
     else if (c.inside) rule.inside = { pattern: c.inside, stopBy: 'end' };
     return root.findAll({ rule }).filter(notSuppressed).length;
   }
+  if (c.kind === 'ast_grep_rule') {
+    // FULL extensibility: the invariant carries a raw ast-grep rule object (pattern / kind / inside /
+    // has / all / any / not / regex / ...). Counts matches (suppression-aware). Lets a project encode
+    // its OWN architectural rules in JSON with no code changes.
+    return root.findAll({ rule: c.rule }).filter(notSuppressed).length;
+  }
   if (c.kind === 'max_function_lines') {
     // generic God-function detector: count functions whose line span exceeds maxLines (lang-aware).
     const kinds = (inv.lang || 'ts') === 'go'
