@@ -87,7 +87,7 @@
       "engines": [
         "engine-agnostic: extracts dispatch case-labels, flags any not in allowed"
       ],
-      "tune": "Set allowed to your in-scope capabilities; flags RENAMES to new capabilities even when the count is unchanged (which a ratchet misses)."
+      "tune": "Set `allowed` to in-scope capability names (flags out-of-scope renames a ratchet misses) and/or `allowedDirs` to in-scope top-level feature dirs (flags a whole new feature area appearing)."
     }
   ]
 }

@@ -155,10 +155,20 @@ function astgrepMetric(inv, src) {
 // scope_diff (T3) is engine-agnostic: it lexically extracts the capability names (dispatch
 // case-label string literals) and counts those NOT in the declared `allowed` scope. Unlike a count
 // ratchet, this catches a RENAME to an out-of-scope capability even when the count is unchanged.
-function scopeOutOfBoundsCount(src, allowed) {
-  const labels = [...src.matchAll(/case\s+"([^"]+)"/g)].map((m) => m[1]);
-  const set = new Set(allowed || []);
-  return labels.filter((l) => !set.has(l)).length;
+function scopeOutOfBoundsCount(src, check, dir) {
+  let n = 0;
+  if (check.allowed) { // capability names: dispatch case-labels not in the allowed set
+    const set = new Set(check.allowed);
+    n += [...src.matchAll(/case\s+"([^"]+)"/g)].map((m) => m[1]).filter((l) => !set.has(l)).length;
+  }
+  if (check.allowedDirs && dir && existsSync(dir)) { // new top-level feature dirs (scope creep)
+    const set = new Set(check.allowedDirs);
+    for (const name of readdirSync(dir)) {
+      if (name === 'node_modules' || name === '.git' || name === 'vendor' || name.startsWith('.')) continue;
+      if (statSync(join(dir, name)).isDirectory() && !set.has(name)) n++;
+    }
+  }
+  return n;
 }
 
 // oversized_files (generic, language-agnostic, no per-project tuning): count source files whose
@@ -217,7 +227,7 @@ function moduleFaninCount(dir, maxFanin) {
 export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'module_fanin') return moduleFaninCount(dir, inv.check.maxFanin);
   if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
-  if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check.allowed);
+  if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check, dir);
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
 
