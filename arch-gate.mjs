@@ -1,39 +1,43 @@
 #!/usr/bin/env node
-// arch-gate.mjs — P0 architectural-invariant gate (prototype).
+// arch-gate.mjs — architectural-invariant gate (prototype, P1).
 //
 // Checks a codebase against HUMAN-AUTHORED invariants (invariants.json), RATCHETED against a
 // baseline (never-get-worse). Mechanical + deterministic — no model — so no "who verifies the
 // verifier" problem. See design/architectural-invariant-gate.md.
 //
-//   node arch-gate.mjs <dir> --baseline [--baseline-out f]   # record <dir>'s metrics as baseline
-//   node arch-gate.mjs <dir> [--baseline-in f] [--json]      # check: exit 0 = pass, 3 = blocked
+//   node arch-gate.mjs <dir> [--invariants f] --baseline [--baseline-out f]   # record baseline
+//   node arch-gate.mjs <dir> [--invariants f] [--baseline-in f] [--json]      # check (0 pass / 3 blocked)
 //
-// Auditable suppressions: a per-occurrence check (e.g. no-positional-rows) is suppressed on a line
-// carrying `// anchor:allow <invariant-id>: <reason>`. Suppressed instances are NOT counted as
-// violations but ARE reported (an escape hatch that's visible, not silent). Metric/ratchet
-// invariants are "suppressed" deliberately by re-recording the baseline, not by a line comment.
+// ENGINES (per-invariant `engine` + `lang`):
+//   heuristic (default) — lightweight text/brace parsing of Go-flavored source (no deps).
+//   ast-grep            — REAL multi-language AST via @ast-grep/napi (TypeScript/JS here).
+// The engine is pluggable per invariant, so one config can gate multiple languages.
 //
-// NOTE (P0): metric extraction is lightweight text/brace parsing of Go-flavored source. Production
-// would delegate to real AST engines (go/ast, ts-morph) + pattern engines (semgrep / ast-grep) per
-// the design's adapter model — this proves the invariant model, ratchet, suppressions, and gate.
+// Suppressions: a per-occurrence check is suppressed on a line carrying
+// `// anchor:allow <invariant-id>: <reason>`; the instance is NOT counted but IS reported
+// (auditable escape hatch, not silent). Metric/ratchet invariants are "suppressed" by
+// deliberately re-recording the baseline.
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 export const INVARIANTS = JSON.parse(readFileSync(join(HERE, 'invariants.json'), 'utf8'));
 const BASELINE_PATH = join(HERE, 'baseline.json');
 
-export function readSource(dir) {
+const EXT = { go: ['.go'], ts: ['.ts', '.tsx'], tsx: ['.ts', '.tsx'] };
+export function readSource(dir, lang = 'go') {
   if (!existsSync(dir)) return '';
+  const exts = EXT[lang] || EXT.go;
   return readdirSync(dir)
-    .filter((f) => f.endsWith('.go'))
+    .filter((f) => exts.some((e) => f.endsWith(e)))
     .map((f) => readFileSync(join(dir, f), 'utf8'))
     .join('\n');
 }
 
-// `// anchor:allow <id>: <reason>` -> { id: [{ line, reason }] }
 export function collectSuppressions(src) {
   const out = {};
   src.split('\n').forEach((line, i) => {
@@ -43,33 +47,32 @@ export function collectSuppressions(src) {
   return out;
 }
 
+// ── heuristic engine (Go-flavored text/brace parsing; no deps) ──────────────────
 function blockBody(src, headerRe) {
   const m = headerRe.exec(src);
   if (!m) return null;
   let i = m.index + m[0].length, depth = 1, body = '';
   while (i < src.length && depth > 0) {
     const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') depth--;
+    if (c === '{') depth++; else if (c === '}') depth--;
     if (depth > 0) body += c;
     i++;
   }
   return body;
 }
-function structFieldCount(src, name) {
+function h_structFieldCount(src, name) {
   const body = blockBody(src, new RegExp(`type\\s+${name}\\s+struct\\s*\\{`));
   if (body == null) return 0;
   return body.split('\n').map((l) => l.trim())
     .filter((l) => l && !l.startsWith('//') && !l.startsWith('/*') && !l.startsWith('*')).length;
 }
-function switchCaseCount(src, onExpr) {
+function h_switchCaseCount(src, onExpr) {
   const esc = onExpr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const body = blockBody(src, new RegExp(`switch\\s+${esc}\\s*\\{`));
   if (body == null) return 0;
   return (body.match(/\bcase\b/g) || []).length;
 }
-// per-line so lines carrying an `anchor:allow no-positional-rows` suppression are excluded.
-function magicIndexCount(src) {
+function h_magicIndexCount(src) {
   let n = 0;
   for (const line of src.split('\n')) {
     if (/anchor:allow\s+no-positional-rows\b/.test(line)) continue;
@@ -77,32 +80,72 @@ function magicIndexCount(src) {
   }
   return n;
 }
-export function metricValue(inv, src) {
-  switch (inv.check.kind) {
-    case 'struct_field_count': return structFieldCount(src, inv.check.struct);
-    case 'switch_case_count': return switchCaseCount(src, inv.check.on);
-    case 'magic_index_count': return magicIndexCount(src);
-    default: throw new Error(`unknown check kind: ${inv.check.kind}`);
+function heuristicMetric(check, src) {
+  switch (check.kind) {
+    case 'struct_field_count': return h_structFieldCount(src, check.struct);
+    case 'switch_case_count': return h_switchCaseCount(src, check.on);
+    case 'magic_index_count': return h_magicIndexCount(src);
+    default: throw new Error(`heuristic: unknown check kind ${check.kind}`);
   }
+}
+
+// ── ast-grep engine (real AST; TypeScript/JS via @ast-grep/napi) ────────────────
+let _sg = null;
+function sgRoot(src, lang) {
+  if (!_sg) _sg = require('@ast-grep/napi');
+  const l = lang === 'ts' || lang === 'tsx' ? 'Tsx' : lang;
+  return _sg.parse(l, src).root();
+}
+function astgrepMetric(check, src, lang) {
+  const root = sgRoot(src, lang);
+  if (check.kind === 'magic_index_count') {
+    const lines = src.split('\n');
+    return root.findAll('$A[$N]')
+      .filter((n) => /^\d+$/.test(n.getMatch('N')?.text() ?? ''))
+      .filter((n) => !/anchor:allow\s+no-positional-rows\b/.test(lines[n.range().start.line] || ''))
+      .length;
+  }
+  if (check.kind === 'struct_field_count') {
+    const cls = root.find(`class ${check.struct} { $$$ }`) || root.find(`interface ${check.struct} { $$$ }`);
+    if (!cls) return 0;
+    return cls.findAll({ rule: { kind: 'public_field_definition' } }).length
+      + cls.findAll({ rule: { kind: 'property_signature' } }).length;
+  }
+  if (check.kind === 'switch_case_count') {
+    const sw = root.findAll({ rule: { kind: 'switch_statement' } });
+    if (!sw.length) return 0;
+    return sw[0].findAll({ rule: { kind: 'switch_case' } }).length;
+  }
+  throw new Error(`ast-grep: unknown check kind ${check.kind}`);
+}
+
+export function metricValue(inv, src) {
+  const engine = inv.engine || 'heuristic';
+  if (engine === 'ast-grep') return astgrepMetric(inv.check, src, inv.lang || 'ts');
+  return heuristicMetric(inv.check, src);
 }
 
 function main() {
   const argv = process.argv.slice(2);
-  let dir = null, writeBaseline = false, baselineOut = null, baselineIn = null, json = false;
+  let dir = null, writeBaseline = false, baselineOut = null, baselineIn = null, json = false, invFile = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--baseline') writeBaseline = true;
     else if (a === '--baseline-out') baselineOut = argv[++i];
     else if (a === '--baseline-in') baselineIn = argv[++i];
+    else if (a === '--invariants') invFile = argv[++i];
     else if (a === '--json') json = true;
     else if (!a.startsWith('--')) dir = a;
     else { console.error(`arch-gate: unknown arg ${a}`); process.exit(64); }
   }
-  if (!dir) { console.error('usage: arch-gate.mjs <dir> [--baseline [--baseline-out f]] [--baseline-in f] [--json]'); process.exit(64); }
+  if (!dir) { console.error('usage: arch-gate.mjs <dir> [--invariants f] [--baseline [--baseline-out f]] [--baseline-in f] [--json]'); process.exit(64); }
 
-  const src = readSource(dir);
+  const invariants = invFile ? JSON.parse(readFileSync(invFile, 'utf8')) : INVARIANTS;
+  const srcByLang = {};
+  const getSrc = (lang) => (srcByLang[lang] ??= readSource(dir, lang));
+
   const metrics = {};
-  for (const inv of INVARIANTS) metrics[inv.id] = metricValue(inv, src);
+  for (const inv of invariants) metrics[inv.id] = metricValue(inv, getSrc(inv.lang || 'go'));
 
   if (writeBaseline) {
     const out = baselineOut || BASELINE_PATH;
@@ -111,11 +154,12 @@ function main() {
     process.exit(0);
   }
 
-  const suppressions = collectSuppressions(src);
+  const allSrc = Object.values(srcByLang).join('\n');
+  const suppressions = collectSuppressions(allSrc);
   const baselinePath = baselineIn || BASELINE_PATH;
   const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {};
   const violations = [];
-  for (const inv of INVARIANTS) {
+  for (const inv of invariants) {
     const v = metrics[inv.id];
     const reasons = [];
     if (typeof inv.max === 'number' && v > inv.max) reasons.push(`${v} exceeds absolute max ${inv.max}`);
@@ -133,9 +177,9 @@ function main() {
   }
 
   console.log(`arch-gate: ${dir}`);
-  for (const inv of INVARIANTS) {
+  for (const inv of invariants) {
     const b = baseline[inv.id];
-    console.log(`  ${inv.id}: ${metrics[inv.id]}${typeof b === 'number' ? ` (baseline ${b})` : ''}`);
+    console.log(`  ${inv.id} [${inv.engine || 'heuristic'}/${inv.lang || 'go'}]: ${metrics[inv.id]}${typeof b === 'number' ? ` (baseline ${b})` : ''}`);
   }
   if (suppressionList.length) {
     console.log('Suppressions (auditable — escape hatch is visible, not silent):');
@@ -150,5 +194,4 @@ function main() {
   process.exit(3);
 }
 
-// Run as CLI only when executed directly (so the extractors can be imported, e.g. by arch-trend.mjs).
 if (import.meta.url === pathToFileURL(process.argv[1]).href) main();

@@ -1,0 +1,55 @@
+{
+  "about": "Starter library — the 5 tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ as ready-to-enable architectural invariants. Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols to your codebase. 'status: ready' = implemented check kind; 'status: planned' = the check kind is on the roadmap (design §4) — the template shows the intended shape.",
+  "tenets": [
+    {
+      "tenet": "T1 — Architecture is yours; the coordinator stays thin",
+      "status": "ready",
+      "id": "model-not-god-object",
+      "intent": "The central struct/class stays a thin coordinator; per-view/feature state lives in its own type — not one God Object (the k10s Model: 30+ fields, 110-case Update).",
+      "check": { "kind": "struct_field_count", "struct": "Model" },
+      "max": 8, "mode": "ratchet", "severity": "block",
+      "engines": ["heuristic (Go)", "ast-grep (TS class/interface)"],
+      "tune": "Set `struct` to your coordinator type; `max` to a sane ceiling; keep `ratchet` so it can't grow silently."
+    },
+    {
+      "tenet": "T2 — Per-view isolation; no central dispatch growth",
+      "status": "ready",
+      "id": "bounded-dispatch",
+      "intent": "No ever-growing central branch on a view/mode identity (the k10s `if currentGVR == ...` / 110-case switch). New views plug in via an interface, not new cases.",
+      "check": { "kind": "switch_case_count", "on": "m.view" },
+      "mode": "ratchet", "severity": "block",
+      "engines": ["heuristic (Go)", "ast-grep (TS)"],
+      "tune": "Point `on` at the dispatch discriminant. Ratchet-only (a fixed `max` of ~3 also works)."
+    },
+    {
+      "tenet": "T4 — Typed records; never positional arrays",
+      "status": "ready",
+      "id": "no-positional-rows",
+      "intent": "Data is typed structs/records, never flattened to arrays accessed by magic integer indices (the k10s `ra[3]` = Alloc fragility that breaks silently when a column moves).",
+      "check": { "kind": "magic_index_count" },
+      "max": 0, "mode": "ratchet", "severity": "block",
+      "engines": ["heuristic (Go)", "ast-grep (TS)"],
+      "tune": "max 0 is strict; raise + ratchet if a legacy area has unavoidable positional access (or use `// anchor:allow no-positional-rows: <reason>`)."
+    },
+    {
+      "tenet": "T5 — Mutations on the main loop; workers send messages",
+      "status": "planned",
+      "id": "no-mutation-in-goroutine",
+      "intent": "Background workers must NOT mutate shared state directly (the k10s data race: goroutines writing Model fields with no mutex). They send messages; the main loop mutates.",
+      "check": { "kind": "forbid_pattern", "engine_rule": "field assignment inside a `go func(){...}` (Go) / inside an async worker callback (TS)" },
+      "severity": "block",
+      "engines": ["ast-grep (planned: pattern `go func() { $$$; $RECV.$F = $X; $$$ }`)"],
+      "tune": "Planned check kind (design §4 forbid-pattern). Until then, approximate with a semgrep/ast-grep rule in CI."
+    },
+    {
+      "tenet": "T3 — Explicit scope boundary; fight scope creep",
+      "status": "planned",
+      "id": "scope-boundary",
+      "intent": "Stay within the project's declared scope (the k10s drift from a GPU dashboard into a k9s clone). New top-level capabilities require a deliberate scope change.",
+      "check": { "kind": "scope_diff", "allowed": "scope.md", "flags": "new top-level commands / views / dirs not listed" },
+      "severity": "warn",
+      "engines": ["planned (design §4 scope-diff)"],
+      "tune": "Planned check kind. Until then, the ratcheted `bounded-dispatch`/view count is a partial proxy."
+    }
+  ]
+}

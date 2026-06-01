@@ -82,13 +82,37 @@ Walks git history, computes each invariant's metric at every commit, prints the 
 where each invariant first breaches its max. This makes accumulating rot **visible early** — the
 article's author only discovered it at collapse because velocity hid the trend.
 
-## Honest scope (P0)
+## Engines & multi-language
 
-- Metric extraction is lightweight text/brace parsing of Go-flavored source — reliable on the small
-  sample, **not** production-grade. Production delegates to real AST/pattern engines (go/ast,
-  ts-morph, semgrep, ast-grep) behind per-language adapters (see the design doc §7). This P0 proves
-  the **invariant model + ratchet + gate**, not the parser.
+Checks are computed by a per-invariant **engine** (`engine` + `lang` fields):
+- **`heuristic`** (default) — lightweight text/brace parsing of Go-flavored source, no deps.
+- **`ast-grep`** — **real multi-language AST** via `@ast-grep/napi` (TypeScript/JS here).
+
+So one setup gates multiple languages: the Go invariants run on the heuristic engine; the TS
+invariants (`invariants.ts.json` against `sample-ts/`) run on a genuine TS AST.
+```bash
+npm install                                                  # @ast-grep/napi (for the ast-grep engine)
+node test-arch-gate-ts.mjs                                   # proof: real-AST gate enforces the tenets on TypeScript
+node arch-gate.mjs sample-ts --invariants invariants.ts.json --baseline   # then check vs it
+```
+Adding a language = a parser adapter in `arch-gate.mjs` (go/ast, more ast-grep langs, semgrep), not
+new gate logic. Go via real AST is a follow-up (`@ast-grep/lang-go`); the heuristic engine covers it today.
+
+## Starter tenet library
+
+`library/tenets.json` ships the article's 5 tenets as ready-to-enable invariants (3 implemented, 2
+planned). Copy the ones you want into your `invariants.json` and tune. See `library/README.md`.
+
+## Honest scope
+
 - Mechanical + deterministic (no model) → no "who-verifies-the-verifier" problem; invariants are
   human-authored (the article's Tenet 1).
-- Next (design §12): wire as a pre-commit / AI-loop feedback gate; auditable suppressions; debt-trend
-  report; starter tenet library; multi-language via semgrep.
+- The heuristic (Go) engine is sample-grade text parsing; the ast-grep (TS) engine is real AST.
+  Production would add go/ast + more ast-grep/semgrep rules behind the same adapter seam.
+- Remaining (design §12): `forbid_pattern` (T5 goroutine-mutation) + `scope_diff` (T3) check kinds;
+  Go-via-ast-grep; then point it at a real GROWING repo.
+
+## Tests (all self-contained)
+
+`test-arch-gate.mjs` (gate+ratchet) · `test-precommit.mjs` (hook) · `test-arch-loop.mjs` (AI-loop) ·
+`test-arch-trend.mjs` (debt trend) · `test-arch-gate-ts.mjs` (real-AST multi-language).
