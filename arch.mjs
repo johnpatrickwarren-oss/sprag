@@ -6,6 +6,7 @@
 //   arch trend  <repo> <src> [--invariants f] [--last N]            architectural-debt trend over history
 //   arch loop   <dir> --fixer "<cmd>" [--max-iters N]               AI-loop: gate -> fix -> re-gate
 //   arch install-hook <repo> <src> [invariants]                     install the pre-commit gate
+//   arch scan   <dir> [--name N]                                  survey God code (oversized files / functions / hubs)
 //   arch init   <dir> [--lang go|ts|js] [--out f]                   scaffold generic invariants + baseline
 import { spawnSync } from 'node:child_process';
 import { readdirSync, writeFileSync, statSync, existsSync } from 'node:fs';
@@ -55,8 +56,9 @@ switch (sub) {
   case 'trend': run('node', [join(HERE, 'arch-trend.mjs'), ...rest]); break;
   case 'loop': run('node', [join(HERE, 'arch-loop.mjs'), ...rest]); break;
   case 'install-hook': run('bash', [join(HERE, 'install-hook.sh'), ...rest]); break;
+  case 'scan': run('node', [join(HERE, 'scan.mjs'), ...rest]); break;
   case 'init': init(rest); break;
   default:
-    console.error('usage: arch <check|baseline|trend|loop|install-hook|init> ...  (see header of arch.mjs)');
+    console.error('usage: arch <check|baseline|trend|loop|install-hook|scan|init> ...  (see header of arch.mjs)');
     process.exit(64);
 }

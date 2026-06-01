@@ -4,15 +4,46 @@
   "type": "module",
   "private": false,
   "description": "Enforce human-authored architectural invariants as a ratcheted gate on every change — so AI-built codebases don't silently rot (the k10s failure mode). Real-AST (ast-grep) for Go/TS/JS/Python + a heuristic fallback; pre-commit + AI-loop + debt-trend.",
-  "keywords": ["architecture", "lint", "ast-grep", "pre-commit", "code-quality", "ai-codegen", "technical-debt", "god-object"],
+  "keywords": [
+    "architecture",
+    "lint",
+    "ast-grep",
+    "pre-commit",
+    "code-quality",
+    "ai-codegen",
+    "technical-debt",
+    "god-object"
+  ],
   "license": "MIT",
-  "engines": { "node": ">=20" },
-  "bin": { "arch-gate": "./arch.mjs" },
-  "files": ["arch.mjs", "arch-gate.mjs", "arch-trend.mjs", "arch-loop.mjs", "install-hook.sh", "library/", "README.md", "LICENSE"],
-  "publishConfig": { "access": "public" },
-  "repository": { "type": "git", "url": "https://github.com/anchor/arch-gate.git", "directory": "prototypes/architectural-gate" },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "arch-gate": "./arch.mjs"
+  },
+  "files": [
+    "arch.mjs",
+    "arch-gate.mjs",
+    "arch-trend.mjs",
+    "arch-loop.mjs",
+    "scan.mjs",
+    "install-hook.sh",
+    "library/",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anchor/arch-gate.git",
+    "directory": "prototypes/architectural-gate"
+  },
   "homepage": "https://github.com/anchor/arch-gate#readme",
-  "bugs": { "url": "https://github.com/anchor/arch-gate/issues" },
+  "bugs": {
+    "url": "https://github.com/anchor/arch-gate/issues"
+  },
   "dependencies": {
     "@ast-grep/lang-go": "^0.0.6",
     "@ast-grep/lang-python": "^0.0.6",
