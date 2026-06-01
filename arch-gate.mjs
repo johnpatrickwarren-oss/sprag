@@ -19,7 +19,7 @@
 // deliberately re-recording the baseline.
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
@@ -181,7 +181,41 @@ function oversizedFilesCount(dir, maxLines) {
   return n;
 }
 
+// module_fanin (generic coupling): how many distinct files import each LOCAL module; flags hub
+// modules imported by more than maxFanin files — the k10s "everything depends on the God object"
+// smell. Relative-import based (JS/TS family); language-agnostic in spirit.
+const FANIN_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
+function moduleFaninCount(dir, maxFanin) {
+  if (!dir || !existsSync(dir)) return 0;
+  const files = [];
+  const walk = (d) => {
+    for (const n of readdirSync(d)) {
+      if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (FANIN_EXTS.some((e) => n.endsWith(e))) files.push(p);
+    }
+  };
+  walk(dir);
+  const fanin = new Map(); // resolved module key -> Set(importing file)
+  const importRe = /(?:\bfrom|\brequire\(\s*|\bimport\(\s*)\s*['"]([^'"]+)['"]/g;
+  for (const f of files) {
+    const src = readFileSync(f, 'utf8');
+    let m;
+    while ((m = importRe.exec(src))) {
+      const spec = m[1];
+      if (!spec.startsWith('.')) continue; // local relative imports only
+      const key = pathResolve(dirname(f), spec).replace(/\.(ts|tsx|js|mjs|cjs|jsx)$/, '');
+      (fanin.get(key) || fanin.set(key, new Set()).get(key)).add(f);
+    }
+  }
+  let n = 0;
+  for (const importers of fanin.values()) if (importers.size > maxFanin) n++;
+  return n;
+}
+
 export function metricValue(inv, src, dir) {
+  if (inv.check.kind === 'module_fanin') return moduleFaninCount(dir, inv.check.maxFanin);
   if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check.allowed);
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
