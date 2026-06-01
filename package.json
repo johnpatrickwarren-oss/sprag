@@ -9,6 +9,10 @@
   },
   "scripts": {
     "test": "node run-tests.mjs",
-    "gate": "node arch-gate.mjs"
+    "gate": "node arch-gate.mjs",
+    "arch": "node arch.mjs"
+  },
+  "bin": {
+    "arch": "./arch.mjs"
   }
 }

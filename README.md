@@ -9,21 +9,21 @@ so no oracle-quality ceiling and no "who-verifies-the-verifier" problem. Design:
 
 ## Adopt on your repo (ratchet from where you are)
 
+One unified CLI (`arch`, or `node arch.mjs <cmd>`):
+
 ```bash
 npm install                                              # ast-grep engines
-# 1. pick invariants: copy entries from library/tenets.json into a my-invariants.json and tune,
-#    or start with the generic no-tuning checks (oversized_files, max_function_lines, module_fanin).
-# 2. record your CURRENT state as the accepted baseline (acknowledge existing debt):
-node arch-gate.mjs <src-dir> --invariants my-invariants.json --baseline --baseline-out my-baseline.json
-# 3. enforce — pre-commit (blocks new debt vs HEAD) and/or in the AI build loop:
-./install-hook.sh <repo-dir> <src-rel>                   # pre-commit gate
-node arch-loop.mjs <src-dir> --fixer "<your builder cmd>" # AI-loop feedback gate
-# see the debt trend over history:
-node arch-trend.mjs <repo> <src-rel> --invariants my-invariants.json
+node arch.mjs init <src-dir>                             # scaffold generic invariants + baseline (lang auto-detected)
+node arch.mjs check <src-dir> --invariants arch-invariants.json --baseline-in arch-invariants.baseline.json
+node arch.mjs install-hook <repo-dir> <src-rel> arch-invariants.json   # pre-commit gate (blocks new debt vs HEAD)
+node arch.mjs loop  <src-dir> --fixer "<your builder cmd>"             # AI-loop feedback gate
+node arch.mjs trend <repo> <src-rel> --invariants arch-invariants.json # debt trend over history
 ```
 
-The ratchet means you don't need perfect thresholds up front: start from your current state, and the
-gate refuses to make it worse.
+`init` scaffolds the generic, no-tuning checks (god-files, god-functions, coupling fan-in); add
+project-specific tenets from `library/tenets.json` or any raw ast-grep rule via the `ast_grep_rule`
+check kind. The ratchet means you don't need perfect thresholds up front: start from your current
+state, and the gate refuses to make it worse.
 
 ## Run
 
