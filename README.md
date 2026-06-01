@@ -8,9 +8,9 @@ so no oracle-quality ceiling and no "who-verifies-the-verifier" problem.
 ## Install
 
 ```bash
-npm i -g @anchor/arch-gate     # provides the `arch-gate` command
+npm i -g @johnpatrickwarren-oss/arch-gate     # provides the `arch-gate` command
 # or run without installing:
-npx @anchor/arch-gate init <src-dir>
+npx @johnpatrickwarren-oss/arch-gate init <src-dir>
 ```
 
 (Within this monorepo it lives at `prototypes/architectural-gate/`; run `node arch.mjs <cmd>` there.)

@@ -1,4 +1,4 @@
-# Extracting @anchor/arch-gate to its own repo
+# Extracting @johnpatrickwarren-oss/arch-gate to its own repo
 
 This package is self-contained (the `files` whitelist ships only the tools + library + README +
 LICENSE; samples/tests/baselines stay behind). To split it into a standalone repo:

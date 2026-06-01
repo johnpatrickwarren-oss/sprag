@@ -1,5 +1,5 @@
 {
-  "name": "@anchor/arch-gate",
+  "name": "@johnpatrickwarren-oss/arch-gate",
   "version": "0.1.0",
   "type": "module",
   "private": false,
@@ -38,12 +38,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/anchor/arch-gate.git",
+    "url": "https://github.com/johnpatrickwarren-oss/anchor.git",
     "directory": "prototypes/architectural-gate"
   },
-  "homepage": "https://github.com/anchor/arch-gate#readme",
+  "homepage": "https://github.com/johnpatrickwarren-oss/anchor/tree/main/prototypes/architectural-gate#readme",
   "bugs": {
-    "url": "https://github.com/anchor/arch-gate/issues"
+    "url": "https://github.com/johnpatrickwarren-oss/anchor/issues"
   },
   "dependencies": {
     "@ast-grep/lang-go": "^0.0.6",
