@@ -1,9 +1,9 @@
 # Starter tenet library
 
-The 5 tenets from the k10s post ("I'm Going Back to Writing Code by Hand") as ready-to-enable
-architectural invariants. `tenets.json` is the catalog; copy the entries you want into your
-project's `invariants.json` and **tune** them (the human still owns the architecture — the gate only
-enforces it).
+Ready-to-enable architectural invariants: the **5 structural tenets** from the k10s post ("I'm Going
+Back to Writing Code by Hand") plus **2 layering/test-rot invariants** (L1–L2) learned from adopting
+this gate on real repos. `tenets.json` is the catalog; copy the entries you want into your project's
+`invariants.json` and **tune** them (the human still owns the architecture — the gate only enforces it).
 
 | Tenet | Invariant | Check | Status |
 |---|---|---|---|
@@ -12,6 +12,15 @@ enforces it).
 | T4 — typed records (no positional arrays) | `no-positional-rows` | `magic_index_count` | **ready** |
 | T5 — mutations on the main loop (no async-callback writes) | `no-async-mutation` | `forbid_pattern` | **ready** |
 | T3 — explicit scope boundary (no scope creep) | `scope-boundary` | `scope_diff` | **ready** |
+| L1 — layering: product mustn't depend on process/working-state | `product-not-read-process` | `forbid_path` | **ready** |
+| L2 — no time-bomb tests (tests that can only rot) | `no-time-bomb-tests` | `time_bomb_tests` | **ready** |
+
+T1–T5 catch **structural** decay (size, coupling, dispatch, mutation, scope). L1–L2 catch
+**layering / dependency-direction** decay — a class the size/coupling metrics are blind to:
+- **L1** is *per-project* — only forbid a path that is genuinely a different layer (on the orchestrator
+  repo that owns `coordination/`, you would NOT adopt it). Authored to each repo's architecture.
+- **L2** is *universal* — no product should pin a test to a frozen git ref; round-scoped checks belong
+  in a gate, not the permanent suite. Usually adopt as-is.
 
 **ready** = implemented check kind (works today on Go via the heuristic engine and TypeScript via the
 ast-grep AST engine). **planned** = the check kind is on the roadmap (design §4); the template shows

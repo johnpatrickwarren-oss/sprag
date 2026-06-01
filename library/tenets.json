@@ -1,5 +1,5 @@
 {
-  "about": "Starter library — the 5 tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ as ready-to-enable architectural invariants. Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols to your codebase. 'status: ready' = implemented check kind; 'status: planned' = the check kind is on the roadmap (design §4) — the template shows the intended shape.",
+  "about": "Starter library of ready-to-enable architectural invariants: the 5 structural tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ (T1–T5) PLUS 2 layering/test-rot invariants (L1–L2) learned from adopting this gate on real repos — a class of decay the size/coupling metrics are blind to. Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols/paths to your codebase. 'status: ready' = implemented check kind; 'status: planned' = on the roadmap (design §4), template shows the intended shape.",
   "tenets": [
     {
       "tenet": "T1 — Architecture is yours; the coordinator stays thin",
@@ -88,6 +88,41 @@
         "engine-agnostic: extracts dispatch case-labels, flags any not in allowed"
       ],
       "tune": "Set `allowed` to in-scope capability names (flags out-of-scope renames a ratchet misses) and/or `allowedDirs` to in-scope top-level feature dirs (flags a whole new feature area appearing)."
+    },
+    {
+      "tenet": "L1 — Layering: product must not depend on process/working-state",
+      "status": "ready",
+      "id": "product-not-read-process",
+      "intent": "Product code (src/, test/) must not reach into a lower/sibling layer's working state — e.g. tests reading the build/orchestration scratch dir. Wrong-direction dependencies make the product un-extractable and couple it to ephemeral state (the failure that fused a real repo's test suite to its pipeline's coordination/ tree). Size/coupling metrics never see this.",
+      "check": {
+        "kind": "forbid_path",
+        "dirs": ["test", "src"],
+        "path": "coordination/"
+      },
+      "max": 0,
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "language-agnostic: counts files under `dirs` that reference `path` in CODE (comment citations are stripped first, so provenance notes don't trip it)"
+      ],
+      "tune": "PER-PROJECT — only forbid a path that is genuinely a DIFFERENT layer your product shouldn't touch. Set `path` to that layer's dir (regex); `dirs` to your product layers. Do NOT forbid a path your product legitimately owns (e.g. on the orchestrator repo itself, coordination/ IS the product domain). Suppress legacy refs with `// anchor:allow product-not-read-process: <reason>`."
+    },
+    {
+      "tenet": "L2 — No time-bomb tests (tests that can only rot)",
+      "status": "ready",
+      "id": "no-time-bomb-tests",
+      "intent": "No test pinned to a FROZEN git reference — `git diff <ref>..HEAD`, `--name-only` anti-scope diffs, `git show <sha>`, or a pinned-SHA const. Such a test can only rot: once HEAD moves past that point it fails regardless of product correctness. Round/PR-scoped checks (anti-scope, frozen-surface) belong in a round-aware GATE (see ../install-hook.sh / a pre-merge script), not the permanent suite.",
+      "check": {
+        "kind": "time_bomb_tests",
+        "dirs": ["test"]
+      },
+      "max": 0,
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "language-agnostic: flags test files (*.test.* / *.spec.*) that BOTH invoke git AND carry a frozen-ref marker (so a product SHA-256 hash test that never touches git is not flagged)"
+      ],
+      "tune": "Universal (no product should pin a frozen ref) — usually adopt as-is. Set `dirs` to your test roots. Suppress a deliberate, maintained case with `// anchor:allow no-time-bomb-tests: <reason>`."
     }
   ]
 }
