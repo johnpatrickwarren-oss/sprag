@@ -1,0 +1,5 @@
+[
+  { "id": "no-god-files",     "intent": "No source file over 500 lines (God file).",               "check": { "kind": "oversized_files",    "maxLines": 500 }, "max": 0, "mode": "ratchet", "severity": "block" },
+  { "id": "no-god-functions", "intent": "No function over 80 lines (God function).",                "check": { "kind": "max_function_lines", "maxLines": 80  }, "max": 0, "mode": "ratchet", "severity": "block", "lang": "ts", "engine": "ast-grep" },
+  { "id": "no-god-module",    "intent": "No module imported by more than 12 files (coupling hub).", "check": { "kind": "module_fanin",       "maxFanin": 12 }, "max": 0, "mode": "ratchet", "severity": "block" }
+]

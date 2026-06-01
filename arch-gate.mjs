@@ -246,10 +246,55 @@ function moduleFaninCount(dir, maxFanin) {
   return n;
 }
 
+// God-function detector, recursive + PER FILE: readSource() concatenates only the top-level dir, so
+// on a nested tree (e.g. packages/cli/src/) the concatenated path counts 0. This walks the tree and
+// parses each file on its own (the correct unit — concatenating mixed files into one parse is fragile),
+// summing functions whose line span exceeds maxLines. Suppression-aware via `anchor:allow <id>`.
+const FN_EXTS = { go: ['.go'], python: ['.py'], py: ['.py'], ts: FANIN_EXTS, js: FANIN_EXTS };
+const FN_KINDS = {
+  go: ['function_declaration', 'method_declaration', 'func_literal'],
+  python: ['function_definition'], py: ['function_definition'],
+  ts: ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'],
+};
+function godFunctionCount(dir, maxLines, lang, invId) {
+  if (!dir || !existsSync(dir)) return 0;
+  const exts = FN_EXTS[lang] || FN_EXTS.ts;
+  const kinds = FN_KINDS[lang] || FN_KINDS.ts;
+  const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  let over = 0;
+  const walk = (d) => {
+    for (const n of readdirSync(d)) {
+      if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) { walk(p); continue; }
+      if (!exts.some((e) => n.endsWith(e)) || /\.d\.ts$/.test(n)) continue;
+      const src = readFileSync(p, 'utf8');
+      let root;
+      try { root = sgRoot(src, lang); } catch { continue; } // parse error: skip this file
+      const lines = src.split('\n');
+      for (const k of kinds) {
+        for (const f of root.findAll({ rule: { kind: k } })) {
+          const r = f.range();
+          if ((r.end.line - r.start.line + 1) <= maxLines) continue;
+          if (supRe && supRe.test(lines[r.start.line] || '')) continue;
+          over++;
+        }
+      }
+    }
+  };
+  walk(dir);
+  return over;
+}
+
 export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'module_fanin') return moduleFaninCount(dir, inv.check.maxFanin);
   if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check, dir);
+  // God-function check: prefer the recursive per-file walk when we have a dir (correct on nested
+  // trees); fall back to the concatenated single-parse when only `src` is available.
+  if (inv.check.kind === 'max_function_lines' && dir && existsSync(dir)) {
+    return godFunctionCount(dir, inv.check.maxLines, inv.lang || 'ts', inv.id);
+  }
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
 
