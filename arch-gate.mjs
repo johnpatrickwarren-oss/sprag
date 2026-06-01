@@ -28,7 +28,7 @@ const require = createRequire(import.meta.url);
 export const INVARIANTS = JSON.parse(readFileSync(join(HERE, 'invariants.json'), 'utf8'));
 const BASELINE_PATH = join(HERE, 'baseline.json');
 
-const EXT = { go: ['.go'], ts: ['.ts', '.tsx'], tsx: ['.ts', '.tsx'], js: ['.js', '.mjs', '.cjs', '.jsx'] };
+const EXT = { go: ['.go'], ts: ['.ts', '.tsx'], tsx: ['.ts', '.tsx'], js: ['.js', '.mjs', '.cjs', '.jsx'], python: ['.py'], py: ['.py'] };
 export function readSource(dir, lang = 'go') {
   if (!existsSync(dir)) return '';
   const exts = EXT[lang] || EXT.go;
@@ -92,12 +92,16 @@ function heuristicMetric(inv, src) {
 }
 
 // ── ast-grep engine (real AST; TypeScript/JS via @ast-grep/napi) ────────────────
-let _sg = null, _goRegistered = false;
+let _sg = null, _goRegistered = false, _pyRegistered = false;
 function sgRoot(src, lang) {
   if (!_sg) _sg = require('@ast-grep/napi');
   if (lang === 'go') {
     if (!_goRegistered) { _sg.registerDynamicLanguage({ go: require('@ast-grep/lang-go') }); _goRegistered = true; }
     return _sg.parse('go', src).root();
+  }
+  if (lang === 'python' || lang === 'py') {
+    if (!_pyRegistered) { _sg.registerDynamicLanguage({ python: require('@ast-grep/lang-python') }); _pyRegistered = true; }
+    return _sg.parse('python', src).root();
   }
   return _sg.parse('Tsx', src).root();
 }
@@ -129,8 +133,9 @@ function astgrepMetric(inv, src) {
   }
   if (c.kind === 'max_function_lines') {
     // generic God-function detector: count functions whose line span exceeds maxLines (lang-aware).
-    const kinds = (inv.lang || 'ts') === 'go'
-      ? ['function_declaration', 'method_declaration', 'func_literal']
+    const lang = inv.lang || 'ts';
+    const kinds = lang === 'go' ? ['function_declaration', 'method_declaration', 'func_literal']
+      : (lang === 'python' || lang === 'py') ? ['function_definition']
       : ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'];
     let over = 0;
     for (const k of kinds) {
