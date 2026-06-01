@@ -5,30 +5,44 @@
 // baseline (never-get-worse). Mechanical + deterministic — no model — so no "who verifies the
 // verifier" problem. See design/architectural-invariant-gate.md.
 //
-//   node arch-gate.mjs <dir> --baseline   # record <dir>'s current metrics as the accepted baseline
-//   node arch-gate.mjs <dir>              # check <dir>:  exit 0 = pass,  exit 3 = blocked (rot),  64 = usage
+//   node arch-gate.mjs <dir> --baseline [--baseline-out f]   # record <dir>'s metrics as baseline
+//   node arch-gate.mjs <dir> [--baseline-in f] [--json]      # check: exit 0 = pass, 3 = blocked
 //
-// NOTE (P0): metric extraction here is lightweight text/brace parsing of Go-flavored source, kept
-// reliable on a small sample. Production would delegate to real AST engines (go/ast, ts-morph) and
-// pattern engines (semgrep / ast-grep) per the design's adapter model — this proves the gate logic,
-// the invariant model, and the ratchet, without that machinery.
+// Auditable suppressions: a per-occurrence check (e.g. no-positional-rows) is suppressed on a line
+// carrying `// anchor:allow <invariant-id>: <reason>`. Suppressed instances are NOT counted as
+// violations but ARE reported (an escape hatch that's visible, not silent). Metric/ratchet
+// invariants are "suppressed" deliberately by re-recording the baseline, not by a line comment.
+//
+// NOTE (P0): metric extraction is lightweight text/brace parsing of Go-flavored source. Production
+// would delegate to real AST engines (go/ast, ts-morph) + pattern engines (semgrep / ast-grep) per
+// the design's adapter model — this proves the invariant model, ratchet, suppressions, and gate.
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const INVARIANTS = JSON.parse(readFileSync(join(HERE, 'invariants.json'), 'utf8'));
+export const INVARIANTS = JSON.parse(readFileSync(join(HERE, 'invariants.json'), 'utf8'));
 const BASELINE_PATH = join(HERE, 'baseline.json');
 
-function readSource(dir) {
+export function readSource(dir) {
+  if (!existsSync(dir)) return '';
   return readdirSync(dir)
     .filter((f) => f.endsWith('.go'))
     .map((f) => readFileSync(join(dir, f), 'utf8'))
     .join('\n');
 }
 
-// Body between the brace that follows a header match and its matching close brace.
+// `// anchor:allow <id>: <reason>` -> { id: [{ line, reason }] }
+export function collectSuppressions(src) {
+  const out = {};
+  src.split('\n').forEach((line, i) => {
+    const m = line.match(/anchor:allow\s+([\w-]+)\s*:\s*(.+?)\s*$/);
+    if (m) (out[m[1]] ||= []).push({ line: i + 1, reason: m[2] });
+  });
+  return out;
+}
+
 function blockBody(src, headerRe) {
   const m = headerRe.exec(src);
   if (!m) return null;
@@ -54,11 +68,16 @@ function switchCaseCount(src, onExpr) {
   if (body == null) return 0;
   return (body.match(/\bcase\b/g) || []).length;
 }
+// per-line so lines carrying an `anchor:allow no-positional-rows` suppression are excluded.
 function magicIndexCount(src) {
-  // identifier indexed by an integer literal — the `ra[3]` positional-fragility smell.
-  return (src.match(/\b[A-Za-z_]\w*\[\d+\]/g) || []).length;
+  let n = 0;
+  for (const line of src.split('\n')) {
+    if (/anchor:allow\s+no-positional-rows\b/.test(line)) continue;
+    n += (line.match(/\b[A-Za-z_]\w*\[\d+\]/g) || []).length;
+  }
+  return n;
 }
-function metricValue(inv, src) {
+export function metricValue(inv, src) {
   switch (inv.check.kind) {
     case 'struct_field_count': return structFieldCount(src, inv.check.struct);
     case 'switch_case_count': return switchCaseCount(src, inv.check.on);
@@ -67,11 +86,6 @@ function metricValue(inv, src) {
   }
 }
 
-// Flags:
-//   --baseline            compute <dir>'s metrics and write them as the baseline, then exit
-//   --baseline-out <file> where --baseline writes (default: baseline.json next to this script)
-//   --baseline-in <file>  baseline to check against (default: baseline.json)
-//   --json                emit machine-readable result (for the AI-loop / tooling)
 function main() {
   const argv = process.argv.slice(2);
   let dir = null, writeBaseline = false, baselineOut = null, baselineIn = null, json = false;
@@ -97,6 +111,7 @@ function main() {
     process.exit(0);
   }
 
+  const suppressions = collectSuppressions(src);
   const baselinePath = baselineIn || BASELINE_PATH;
   const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {};
   const violations = [];
@@ -107,14 +122,13 @@ function main() {
     if (inv.mode === 'ratchet' && typeof baseline[inv.id] === 'number' && v > baseline[inv.id]) {
       reasons.push(`regressed ${baseline[inv.id]} -> ${v} (ratchet: must not increase)`);
     }
-    if (reasons.length) {
-      violations.push({ id: inv.id, value: v, baseline: baseline[inv.id], reasons, intent: inv.intent, severity: inv.severity });
-    }
+    if (reasons.length) violations.push({ id: inv.id, value: v, baseline: baseline[inv.id], reasons, intent: inv.intent, severity: inv.severity });
   }
   const blocked = violations.length > 0;
+  const suppressionList = Object.entries(suppressions).flatMap(([id, ls]) => ls.map((s) => ({ id, ...s })));
 
   if (json) {
-    process.stdout.write(JSON.stringify({ dir, metrics, baseline, blocked, violations }, null, 2) + '\n');
+    process.stdout.write(JSON.stringify({ dir, metrics, baseline, blocked, violations, suppressions: suppressionList }, null, 2) + '\n');
     process.exit(blocked ? 3 : 0);
   }
 
@@ -122,6 +136,10 @@ function main() {
   for (const inv of INVARIANTS) {
     const b = baseline[inv.id];
     console.log(`  ${inv.id}: ${metrics[inv.id]}${typeof b === 'number' ? ` (baseline ${b})` : ''}`);
+  }
+  if (suppressionList.length) {
+    console.log('Suppressions (auditable — escape hatch is visible, not silent):');
+    for (const s of suppressionList) console.log(`  ~ [${s.id}] line ${s.line}: ${s.reason}`);
   }
   if (!blocked) { console.log('PASS: no architectural-invariant violations.'); process.exit(0); }
   console.log('\nBLOCKED — architectural invariant(s) violated:');
@@ -131,4 +149,6 @@ function main() {
   }
   process.exit(3);
 }
-main();
+
+// Run as CLI only when executed directly (so the extractors can be imported, e.g. by arch-trend.mjs).
+if (import.meta.url === pathToFileURL(process.argv[1]).href) main();

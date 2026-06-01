@@ -59,6 +59,29 @@ that can't satisfy the gate means the change is genuinely incompatible with the 
 is a human call (the inverse of the behavioral harness's phantom problem: here a stuck loop means
 the *code* is wrong, not the invariant).
 
+## Auditable suppressions (escape hatch that stays visible)
+
+A per-occurrence check is suppressed on a line carrying `// anchor:allow <invariant-id>: <reason>`.
+The instance is **not counted as a violation** but **is reported** in a "Suppressions" section — so
+the escape hatch is visible and auditable, never silent. (A gate with no escape hatch gets disabled
+wholesale; one with *untracked* suppression rots silently — this is the middle path.) Metric/ratchet
+invariants are instead "suppressed" by deliberately re-recording the baseline.
+
+```go
+n := legacyRow[2] // anchor:allow no-positional-rows: legacy CSV import, tracked in #123
+```
+
+## Debt-trend report (the early warning k10s never had)
+
+```bash
+node arch-trend.mjs <repo> <src-rel> [--last N=20] [--json]
+node test-arch-trend.mjs    # proof: surfaces a Model growing 6->10 over commits + flags the max breach
+```
+
+Walks git history, computes each invariant's metric at every commit, prints the trend, and flags
+where each invariant first breaches its max. This makes accumulating rot **visible early** — the
+article's author only discovered it at collapse because velocity hid the trend.
+
 ## Honest scope (P0)
 
 - Metric extraction is lightweight text/brace parsing of Go-flavored source — reliable on the small
