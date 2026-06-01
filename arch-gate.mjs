@@ -193,8 +193,21 @@ function scopeOutOfBoundsCount(src, check, dir) {
   return n;
 }
 
+// Generated / build-artifact files are NOT authored source — exclude them so metrics reflect
+// hand-written code and stay DETERMINISTIC regardless of whether the tree has been built (otherwise
+// a `tsc` run that emits .js next to each .ts would double the counts and corrupt a ratchet baseline):
+//  - a .js/.cjs/.mjs/.jsx that has a .ts/.tsx sibling (tsc output)
+//  - a *.min / *.bundle / *.browser bundle
+//  - a .d.ts type-declaration file
+function isGeneratedFile(p) {
+  if (/\.d\.ts$/.test(p)) return true;
+  if (/\.(min|bundle|browser)\.(js|cjs|mjs|jsx)$/.test(p)) return true;
+  const m = p.match(/^(.*)\.(js|cjs|mjs|jsx)$/);
+  return !!m && (existsSync(m[1] + '.ts') || existsSync(m[1] + '.tsx'));
+}
+
 // oversized_files (generic, language-agnostic, no per-project tuning): count source files whose
-// line count exceeds maxLines — the "God file" smell. Recurses, skipping deps/vcs.
+// line count exceeds maxLines — the "God file" smell. Recurses, skipping deps/vcs/generated.
 const SRC_EXTS = ['.go', '.ts', '.tsx', '.js', '.mjs', '.jsx', '.py', '.rs', '.java', '.rb', '.sh'];
 function oversizedFilesCount(dir, maxLines) {
   if (!dir || !existsSync(dir)) return 0;
@@ -205,7 +218,7 @@ function oversizedFilesCount(dir, maxLines) {
       const p = join(d, name);
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
-      if (!SRC_EXTS.some((e) => name.endsWith(e))) continue;
+      if (!SRC_EXTS.some((e) => name.endsWith(e)) || isGeneratedFile(p)) continue;
       if (readFileSync(p, 'utf8').split('\n').length > maxLines) n++;
     }
   };
@@ -225,7 +238,7 @@ function moduleFaninCount(dir, maxFanin) {
       if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
       const p = join(d, n);
       if (statSync(p).isDirectory()) walk(p);
-      else if (FANIN_EXTS.some((e) => n.endsWith(e))) files.push(p);
+      else if (FANIN_EXTS.some((e) => n.endsWith(e)) && !isGeneratedFile(p)) files.push(p);
     }
   };
   walk(dir);
@@ -267,7 +280,7 @@ function godFunctionCount(dir, maxLines, lang, invId) {
       if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
       const p = join(d, n);
       if (statSync(p).isDirectory()) { walk(p); continue; }
-      if (!exts.some((e) => n.endsWith(e)) || /\.d\.ts$/.test(n)) continue;
+      if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;
       const src = readFileSync(p, 'utf8');
       let root;
       try { root = sgRoot(src, lang); } catch { continue; } // parse error: skip this file
