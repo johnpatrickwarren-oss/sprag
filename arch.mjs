@@ -9,7 +9,7 @@
 //   arch scan   <dir> [--name N]                                  survey God code (oversized files / functions / hubs)
 //   arch init   <dir> [--lang go|ts|js] [--out f]                   scaffold generic invariants + baseline
 import { spawnSync } from 'node:child_process';
-import { readdirSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, writeFileSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,8 +36,14 @@ function init(argv) {
     { id: 'no-god-functions', intent: 'No function over 60 lines (God function) — decompose it.', check: { kind: 'max_function_lines', maxLines: 60 }, mode: 'ratchet', severity: 'block', lang: astLangs[lang] || 'ts', engine: 'ast-grep' },
   ];
   if (lang !== 'go') invs.push({ id: 'no-god-module', intent: 'No module imported by more than 8 files (coupling hub / God module).', check: { kind: 'module_fanin', maxFanin: 8 }, mode: 'ratchet', severity: 'block' });
+  // TDD shadow + no-rotting-tests (ratchet: grandfather today's untested/legacy, block new).
+  invs.push({ id: 'require-tests', intent: 'Every source module ships with a test (the durable half of TDD). Ratchet grandfathers existing untested files; blocks NEW ones.', check: { kind: 'require_tests', dirs: ['.'] }, mode: 'ratchet', severity: 'block' });
+  invs.push({ id: 'no-time-bomb-tests', intent: 'No test pinned to a frozen git ref/SHA — round-scoped checks belong in a gate, not the permanent suite.', check: { kind: 'time_bomb_tests', dirs: ['.'] }, max: 0, mode: 'ratchet', severity: 'block' });
   writeFileSync(out, JSON.stringify(invs, null, 2) + '\n');
-  console.log(`wrote ${out}  (lang=${lang}, ${invs.length} generic invariants — tune them, or add tenets from library/tenets.json)`);
+  console.log(`wrote ${out}  (lang=${lang}, ${invs.length} invariants — tune them, or add tenets from library/tenets.json)`);
+  // Drop the engineering-disciplines block next to it (the behavioral half; reference it from CLAUDE.md).
+  const discOut = join(dirname(out), 'arch-disciplines.md');
+  try { writeFileSync(discOut, readFileSync(join(HERE, 'library', 'disciplines.md'), 'utf8')); console.log(`wrote ${discOut}  (add \`@${discOut.split('/').pop()}\` to your CLAUDE.md so the agent applies them)`); } catch { /* library not present (dev) — skip */ }
   const blOut = out.replace(/\.json$/, '') + '.baseline.json';
   const r = spawnSync('node', [join(HERE, 'arch-gate.mjs'), dir, '--invariants', out, '--baseline', '--baseline-out', blOut], { stdio: 'inherit' });
   if (r.status === 0) {

@@ -22,11 +22,12 @@ const r = spawnSync('node', [join(HERE, 'arch-gate.mjs'), CORPUS, '--invariants'
 let m = {};
 try { m = JSON.parse(r.stdout).metrics || {}; } catch { /* leave empty -> fails below */ }
 
-const EXPECTED = { 'god-files': 1, 'god-functions': 1, 'coupling-hub': 1, 'time-bomb-tests': 1, 'layering': 1 };
+const EXPECTED = { 'god-files': 1, 'god-functions': 1, 'coupling-hub': 1, 'time-bomb-tests': 1, 'layering': 1, 'require-tests': 1 };
 for (const [k, v] of Object.entries(EXPECTED)) expect(`${k} == ${v} on real-shaped corpus`, m[k] === v, `got ${JSON.stringify(m[k])} (full: ${JSON.stringify(m)})`);
-// the two assertions that lock the bugs found only on real repos:
+// the assertions that lock behaviors found only on real repos:
 expect('god-functions counts authored .ts ONLY, not the compiled .js sibling (determinism)', m['god-functions'] === 1, `got ${m['god-functions']} (2 => build artifact double-counted)`);
 expect('layering counts code references, NOT comment citations (comment-stripping)', m['layering'] === 1, `got ${m['layering']} (2 => comment citation falsely flagged)`);
+expect('require-tests counts the untested module ONLY (paid.ts has a test, unpaid.ts does not)', m['require-tests'] === 1, `got ${m['require-tests']} (2 => paid.test.ts not matched to paid.ts)`);
 
 console.log(failed === 0 ? '\nPASS: integration corpus — gate produces exact metrics on real-shaped code ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);

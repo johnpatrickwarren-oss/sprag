@@ -119,12 +119,18 @@ Checks are computed by a per-invariant **engine** (`engine` + `lang` fields):
 - **`heuristic`** (default) — lightweight text/brace parsing of Go-flavored source, no deps (fallback).
 
 Built-in check kinds: `struct_field_count`, `switch_case_count`, `magic_index_count`, `forbid_pattern`,
-`oversized_files`, `max_function_lines`, `module_fanin`, `scope_diff`, `forbid_path`, `time_bomb_tests`.
-For anything bespoke, the **`ast_grep_rule`** kind takes a raw ast-grep rule object, so a project can
-encode its *own* architectural rules in JSON with no code changes.
+`oversized_files`, `max_function_lines`, `module_fanin`, `scope_diff`, `forbid_path`, `time_bomb_tests`,
+`require_tests`. For anything bespoke, the **`ast_grep_rule`** kind takes a raw ast-grep rule object, so
+a project can encode its *own* architectural rules in JSON with no code changes.
 
-Two of these target **layering / dependency-direction** rot, not size/coupling — a class the metric
-checks are blind to (learned by refactoring real repos where the rot lived there, not in file size):
+Three of these go beyond size/coupling — **layering / dependency-direction** and **test discipline** —
+classes the metric checks are blind to (learned by refactoring real repos where the rot lived there):
+
+- **`require_tests`** `{ dirs:[...] }` — the deterministic **shadow of TDD**: flags source modules under
+  `dirs` with no corresponding test (base-name match, layout-agnostic: `foo.ts` ↔ `foo.test.ts` /
+  `foo_test.go` / `test_foo.py`). Can't prove test-*first*, but enforces TDD's durable outcome — "no
+  untested code ships" — as a ratchet (grandfather today's untested, block NEW). Excludes barrel
+  `index.*` (override via `exclude`). Suppression-aware.
 
 - **`forbid_path`** `{ dirs:[...], path:'<regex>' }` — flags files under `dirs` that *reference* a
   forbidden path **in code** (imports / fs reads, not comment citations). Encodes a dependency-direction
@@ -139,8 +145,18 @@ checks are blind to (learned by refactoring real repos where the rot lived there
 
 ## Starter tenet library
 
-`library/tenets.json` ships the article's **all 5 tenets** as ready-to-enable invariants (T1–T5, all
-implemented). Copy the ones you want into your `invariants.json` and tune. See `library/README.md`.
+`library/tenets.json` ships the k10s **5 tenets** (T1–T5) plus **2 layering/test-rot invariants**
+(L1–L2) as ready-to-enable invariants. Copy the ones you want into your `invariants.json` and tune. See
+`library/README.md`.
+
+## Engineering disciplines (the behavioral half)
+
+The gate enforces the *structural* half of quality deterministically. The *behavioral* half — the few
+disciplines that still beat a strong base model — ships as `library/disciplines.md`: **test-driven**,
+**systematic debugging**, **rigorous review-receipt**, and **brainstorm-before-building**, plus the
+"tests green + gate clean before done" habit. `arch init` drops it into the repo as `arch-disciplines.md`;
+reference it from your `CLAUDE.md` (`@arch-disciplines.md`) so the agent applies them in-context — the
+whole quality stack (mechanical floor + behavioral disciplines) with no orchestration harness.
 
 ## Honest scope
 

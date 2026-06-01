@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from '
 import { join, dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
-import { isGeneratedFile, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount } from './metrics.mjs';
+import { isGeneratedFile, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount } from './metrics.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -240,6 +240,7 @@ export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
   if (inv.check.kind === 'forbid_path') return forbidPathRefCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'time_bomb_tests') return timeBombTestCount(dir, inv.check, inv.id);
+  if (inv.check.kind === 'require_tests') return untestedModuleCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check, dir);
   // God-function check: prefer the recursive per-file walk when we have a dir (correct on nested
   // trees); fall back to the concatenated single-parse when only `src` is available.

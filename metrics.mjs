@@ -140,3 +140,55 @@ export function timeBombTestCount(dir, check, invId) {
   for (const r of roots) walk(r);
   return n;
 }
+
+// require_tests: the deterministic SHADOW of test-driven-development. Flags source modules under
+// `dirs` that have NO corresponding test anywhere in the tree. It can't prove a test was written
+// FIRST, but it enforces TDD's durable outcome — "no untested code ships" — as a ratchet (grandfather
+// today's untested files, block NEW ones). "Has a test" is matched by base name, layout-agnostic:
+//   src/foo.ts -> foo.{test,spec}.{ts,tsx,js,mjs,cjs,jsx} | foo_test.go | test_foo.py | foo_test.py
+// Excludes the test files themselves, generated artifacts, and (by default) barrel `index.*` files;
+// `check.exclude` (regex on the relative path) overrides the default exclusion. Suppression-aware.
+const CODE_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx', '.go', '.py'];
+function testCovers(name) { // the source base-name a test file is "about", or null if not a test
+  let m;
+  if ((m = name.match(/^(.*)\.(test|spec)\.(?:ts|tsx|js|mjs|cjs|jsx)$/))) return m[1];
+  if ((m = name.match(/^(.*)_test\.go$/))) return m[1];
+  if ((m = name.match(/^test_(.+)\.py$/))) return m[1];
+  if ((m = name.match(/^(.*)_test\.py$/))) return m[1];
+  return null;
+}
+const srcBase = (name) => name.replace(/\.(?:ts|tsx|js|mjs|cjs|jsx|go|py)$/, '');
+export function untestedModuleCount(dir, check, invId) {
+  if (!dir || !existsSync(dir)) return 0;
+  const roots = (check.dirs || ['src']).map((d) => join(dir, d)).filter((p) => existsSync(p));
+  if (!roots.length) return 0;
+  const excludeRe = check.exclude ? new RegExp(check.exclude) : /(^|\/)index\.(?:ts|tsx|js|mjs|cjs|jsx)$/;
+  const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  // 1. collect the base name of every test in the WHOLE tree (tests may live anywhere).
+  const covered = new Set();
+  const collect = (d) => {
+    for (const name of readdirSync(d)) {
+      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      const p = join(d, name);
+      if (statSync(p).isDirectory()) { collect(p); continue; }
+      const b = testCovers(name);
+      if (b !== null) covered.add(b);
+    }
+  };
+  collect(dir);
+  // 2. count source modules under `dirs` with no covering test.
+  let n = 0;
+  const walk = (d) => {
+    for (const name of readdirSync(d)) {
+      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      const p = join(d, name);
+      if (statSync(p).isDirectory()) { walk(p); continue; }
+      if (!CODE_EXTS.some((e) => name.endsWith(e))) continue;
+      if (testCovers(name) !== null || isGeneratedFile(p) || excludeRe.test(p)) continue;
+      if (supRe && supRe.test(readFileSync(p, 'utf8'))) continue;
+      if (!covered.has(srcBase(name))) n++;
+    }
+  };
+  for (const r of roots) walk(r);
+  return n;
+}
