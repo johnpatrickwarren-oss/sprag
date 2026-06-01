@@ -25,7 +25,16 @@ import { createRequire } from 'node:module';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-export const INVARIANTS = JSON.parse(readFileSync(join(HERE, 'invariants.json'), 'utf8'));
+// Default invariants: the repo ships a sample invariants.json (used by the tests); when absent
+// (e.g. a published install), fall back to language-agnostic generic checks so `arch check <dir>`
+// is sensible out of the box. (The real entry point is `arch init`, which scaffolds + baselines.)
+const BUILTIN_DEFAULT = [
+  { id: 'no-god-files', intent: 'No source file over 800 lines (God file).', check: { kind: 'oversized_files', maxLines: 800 }, mode: 'ratchet', severity: 'block' },
+  { id: 'no-god-module', intent: 'No module imported by more than 8 files (coupling hub).', check: { kind: 'module_fanin', maxFanin: 8 }, mode: 'ratchet', severity: 'block' },
+];
+export const INVARIANTS = existsSync(join(HERE, 'invariants.json'))
+  ? JSON.parse(readFileSync(join(HERE, 'invariants.json'), 'utf8'))
+  : BUILTIN_DEFAULT;
 const BASELINE_PATH = join(HERE, 'baseline.json');
 
 const EXT = { go: ['.go'], ts: ['.ts', '.tsx'], tsx: ['.ts', '.tsx'], js: ['.js', '.mjs', '.cjs', '.jsx'], python: ['.py'], py: ['.py'] };

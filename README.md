@@ -3,9 +3,17 @@
 Enforce **human-authored architectural invariants** as a **gate on every change**, ratcheted against
 a baseline, so AI-built codebases don't silently rot (the k10s failure mode:
 https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/). Mechanical + deterministic (no model),
-so no oracle-quality ceiling and no "who-verifies-the-verifier" problem. Design:
-`design/architectural-invariant-gate.md`. The architectural analog of the behavioral
-`prototypes/verification-harness/`.
+so no oracle-quality ceiling and no "who-verifies-the-verifier" problem.
+
+## Install
+
+```bash
+npm i -g @anchor/arch-gate     # provides the `arch-gate` command
+# or run without installing:
+npx @anchor/arch-gate init <src-dir>
+```
+
+(Within this monorepo it lives at `prototypes/architectural-gate/`; run `node arch.mjs <cmd>` there.)
 
 ## Adopt on your repo (ratchet from where you are)
 
