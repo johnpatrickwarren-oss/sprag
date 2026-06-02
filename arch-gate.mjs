@@ -235,6 +235,55 @@ function godFunctionCount(dir, maxLines, lang, invId) {
   return over;
 }
 
+// Cyclomatic-complexity decision nodes per language (control-flow branch points). A function's
+// complexity ≈ 1 + (decision nodes) + (short-circuit && / || / and / or) within it — a LESS-ARBITRARY
+// signal than raw line count: it flags BRANCHY functions (hard to follow + test; cyclomatic > ~10 is
+// the McCabe/NIST anchor), not merely long-but-flat ones. Reuses the same ast-grep parse as the
+// god-function check, so it is deterministic and adds no model cost. Conservative: a function's count
+// includes branches inside nested closures — fine for a ratcheted floor; suppress legit cases.
+const DECISION_KINDS = {
+  go: ['if_statement', 'for_statement', 'expression_case', 'type_case', 'communication_case'],
+  python: ['if_statement', 'elif_clause', 'for_statement', 'while_statement', 'except_clause', 'conditional_expression', 'case_clause'],
+  py: ['if_statement', 'elif_clause', 'for_statement', 'while_statement', 'except_clause', 'conditional_expression', 'case_clause'],
+  ts: ['if_statement', 'for_statement', 'for_in_statement', 'while_statement', 'do_statement', 'switch_case', 'catch_clause', 'ternary_expression'],
+};
+DECISION_KINDS.js = DECISION_KINDS.ts;
+const boolPatterns = (lang) => ((lang === 'python' || lang === 'py') ? ['$A and $B', '$A or $B'] : ['$A && $B', '$A || $B']);
+function complexFunctionCount(dir, maxComplexity, lang, invId) {
+  if (!dir || !existsSync(dir)) return 0;
+  const exts = FN_EXTS[lang] || FN_EXTS.ts;
+  const fnKinds = FN_KINDS[lang] || FN_KINDS.ts;
+  const decisionKinds = DECISION_KINDS[lang] || DECISION_KINDS.ts;
+  const bools = boolPatterns(lang);
+  const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  let over = 0;
+  const walk = (d) => {
+    for (const n of readdirSync(d)) {
+      if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) { walk(p); continue; }
+      if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;
+      const src = readFileSync(p, 'utf8');
+      let root;
+      try { root = sgRoot(src, lang); } catch { continue; } // parse error: skip this file
+      const lines = src.split('\n');
+      for (const fk of fnKinds) {
+        for (const fn of root.findAll({ rule: { kind: fk } })) {
+          let cx = 1;
+          for (const dk of decisionKinds) cx += fn.findAll({ rule: { kind: dk } }).length;
+          for (const bp of bools) cx += fn.findAll({ rule: { pattern: bp } }).length;
+          if (cx <= maxComplexity) continue;
+          const sl = fn.range().start.line; // suppression on the function line OR the line directly above
+          if (supRe && (supRe.test(lines[sl] || '') || supRe.test(lines[sl - 1] || ''))) continue;
+          over++;
+        }
+      }
+    }
+  };
+  walk(dir);
+  return over;
+}
+
 export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'module_fanin') return moduleFaninCount(dir, inv.check.maxFanin);
   if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
@@ -246,6 +295,9 @@ export function metricValue(inv, src, dir) {
   // trees); fall back to the concatenated single-parse when only `src` is available.
   if (inv.check.kind === 'max_function_lines' && dir && existsSync(dir)) {
     return godFunctionCount(dir, inv.check.maxLines, inv.lang || 'ts', inv.id);
+  }
+  if (inv.check.kind === 'max_complexity' && dir && existsSync(dir)) {
+    return complexFunctionCount(dir, inv.check.maxComplexity ?? 10, inv.lang || 'ts', inv.id);
   }
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }

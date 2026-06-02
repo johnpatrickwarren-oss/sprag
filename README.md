@@ -119,12 +119,24 @@ Checks are computed by a per-invariant **engine** (`engine` + `lang` fields):
 - **`heuristic`** (default) — lightweight text/brace parsing of Go-flavored source, no deps (fallback).
 
 Built-in check kinds: `struct_field_count`, `switch_case_count`, `magic_index_count`, `forbid_pattern`,
-`oversized_files`, `max_function_lines`, `module_fanin`, `scope_diff`, `forbid_path`, `time_bomb_tests`,
-`require_tests`. For anything bespoke, the **`ast_grep_rule`** kind takes a raw ast-grep rule object, so
-a project can encode its *own* architectural rules in JSON with no code changes.
+`oversized_files`, `max_function_lines`, `max_complexity`, `module_fanin`, `scope_diff`, `forbid_path`,
+`time_bomb_tests`, `require_tests`. For anything bespoke, the **`ast_grep_rule`** kind takes a raw
+ast-grep rule object, so a project can encode its *own* architectural rules in JSON with no code changes.
 
-Three of these go beyond size/coupling — **layering / dependency-direction** and **test discipline** —
-classes the metric checks are blind to (learned by refactoring real repos where the rot lived there):
+### On line counts vs. complexity
+
+Raw line count (`max_function_lines`, `oversized_files`) is a *cheap proxy*, and the specific number is a
+convention, not a law — a long-but-flat function is fine; a short, deeply-branched one is not. **`max_complexity`**
+is the less-arbitrary signal: it approximates **cyclomatic complexity** (1 + decision points + short-circuit
+`&&`/`||`) per function from the same AST parse — flagging *branchy* functions (the ones that are genuinely
+hard to follow and test; >~10 is the McCabe/NIST anchor), not merely long ones. Same zero-token, deterministic
+cost as `max_function_lines`. What keeps *any* threshold from being tyrannical is the design, not the number:
+**you** author the limit for your codebase, the **ratchet** enforces "never worse" rather than a magic absolute,
+and a legitimate overrun is recorded with an **auditable suppression** (`// anchor:allow <id>: <reason>`) — visible,
+not silent. The gate surfaces *candidates for judgment*, not verdicts.
+
+The checks below go beyond size — **layering / dependency-direction** and **test discipline** — classes
+the metric checks are blind to (learned by refactoring real repos where the rot lived there):
 
 - **`require_tests`** `{ dirs:[...] }` — the deterministic **shadow of TDD**: flags source modules under
   `dirs` with no corresponding test (base-name match, layout-agnostic: `foo.ts` ↔ `foo.test.ts` /
