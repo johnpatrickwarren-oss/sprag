@@ -1,5 +1,5 @@
 {
-  "about": "Starter library of ready-to-enable architectural invariants: the 5 structural tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ (T1–T5), 2 layering/test-rot invariants (L1–L2), and 1 discipline-derived check (D1) — the latter learned from adopting this gate on real repos + the engineering disciplines it pairs with (a class of decay the size/coupling metrics are blind to). Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols/paths to your codebase. 'status: ready' = implemented check kind; 'status: planned' = on the roadmap (design §4), template shows the intended shape.",
+  "about": "Starter library of ready-to-enable architectural invariants: the 5 structural tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ (T1–T5), 2 layering/test-rot invariants (L1–L2), 1 discipline-derived check (D1), and 1 quality-metric check (Q1) — the latter three learned from adopting this gate on real repos + the engineering disciplines it pairs with (classes of decay the size/coupling metrics are blind to). Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols/paths to your codebase. 'status: ready' = implemented check kind; 'status: planned' = on the roadmap (design §4), template shows the intended shape.",
   "tenets": [
     {
       "tenet": "T1 — Architecture is yours; the coordinator stays thin",
@@ -139,6 +139,22 @@
         "language-agnostic: counts source files (.ts/.tsx/.js/.mjs/.cjs/.jsx/.go/.py) under `dirs` with no base-name-matching test; excludes the tests themselves, generated artifacts, and barrel index.* files"
       ],
       "tune": "Set `dirs` to your source roots. Keep `ratchet` (no absolute `max`) so today's untested/legacy files are grandfathered and only NEW untested modules block — set `max: 0` only on a greenfield repo you want fully covered. Override the barrel exclusion with `exclude` (regex on the relative path); suppress a deliberate exception with `// anchor:allow require-tests: <reason>`. Pairs with the test-driven-development discipline in `disciplines.md`."
+    },
+    {
+      "tenet": "Q1 — Bounded function complexity (the principled god-function check)",
+      "status": "ready",
+      "id": "no-complex-functions",
+      "intent": "No function whose cyclomatic complexity exceeds the limit (≈ 1 + decision points + short-circuit &&/||). A LESS-ARBITRARY signal than raw line count: it flags BRANCHY functions (genuinely hard to follow and test), not merely long-but-flat ones. Cyclomatic > ~10 is the McCabe/NIST anchor. Prefer this over (or alongside) a line-count god-function rule.",
+      "check": {
+        "kind": "max_complexity",
+        "maxComplexity": 10
+      },
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "ast-grep (Go / TypeScript / JS / Python): per-function decision-node + &&/|| count from the same parse as the god-function check — deterministic, no model cost"
+      ],
+      "tune": "Set `maxComplexity` to your ceiling (10 = McCabe/NIST; 12–15 is a forgiving starter). Ratchet so existing complex functions are grandfathered and only NEW over-complex ones block. A legitimately-branchy-but-cohesive function (a flat dispatch, a parser) is a deliberate `// anchor:allow no-complex-functions: <reason>` — visible, not silent. The number is a convention; the ratchet + suppression are what make it fair. Pairs with / replaces a `max_function_lines` rule."
     }
   ]
 }
