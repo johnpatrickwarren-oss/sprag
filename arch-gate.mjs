@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from '
 import { join, dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
-import { isGeneratedFile, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount } from './metrics.mjs';
+import { isGeneratedFile, isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount } from './metrics.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -187,7 +187,7 @@ function scopeOutOfBoundsCount(src, check, dir) {
   if (check.allowedDirs && dir && existsSync(dir)) { // new top-level feature dirs (scope creep)
     const set = new Set(check.allowedDirs);
     for (const name of readdirSync(dir)) {
-      if (name === 'node_modules' || name === '.git' || name === 'vendor' || name.startsWith('.')) continue;
+      if (isSkippedDir(name) || name.startsWith('.')) continue;
       if (statSync(join(dir, name)).isDirectory() && !set.has(name)) n++;
     }
   }
@@ -213,7 +213,7 @@ function godFunctionCount(dir, maxLines, lang, invId) {
   let over = 0;
   const walk = (d) => {
     for (const n of readdirSync(d)) {
-      if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
+      if (isSkippedDir(n)) continue;
       const p = join(d, n);
       if (statSync(p).isDirectory()) { walk(p); continue; }
       if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;
@@ -259,7 +259,7 @@ function complexFunctionCount(dir, maxComplexity, lang, invId) {
   let over = 0;
   const walk = (d) => {
     for (const n of readdirSync(d)) {
-      if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
+      if (isSkippedDir(n)) continue;
       const p = join(d, n);
       if (statSync(p).isDirectory()) { walk(p); continue; }
       if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;

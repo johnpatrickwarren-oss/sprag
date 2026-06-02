@@ -17,12 +17,13 @@ const dir = process.argv[2];
 const name = (process.argv.includes('--name') ? process.argv[process.argv.indexOf('--name') + 1] : dir) || '?';
 if (!dir) { console.error('usage: scan.mjs <dir> [--name N]'); process.exit(64); }
 const FILE = 500, FUNC = 80, HUB = 12;
-const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next', 'out', 'coverage', '.astro']);
+const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next', 'out', 'coverage', '.astro',
+  '.venv', 'venv', 'site-packages', '__pycache__', '.tox', '.eggs']); // + *.egg-info (suffix, handled in walk)
 const JSX = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
 const CODE = [...JSX, '.go', '.py'];
 
 const files = [];
-(function walk(d) { for (const n of readdirSync(d)) { if (SKIP.has(n)) continue; const p = join(d, n); let st; try { st = statSync(p); } catch { continue; } if (st.isDirectory()) walk(p); else if (CODE.some((e) => n.endsWith(e)) && !/\.d\.ts$/.test(n) && !isGenerated(p)) files.push(p); } })(dir);
+(function walk(d) { for (const n of readdirSync(d)) { if (SKIP.has(n) || n.endsWith('.egg-info')) continue; const p = join(d, n); let st; try { st = statSync(p); } catch { continue; } if (st.isDirectory()) walk(p); else if (CODE.some((e) => n.endsWith(e)) && !/\.d\.ts$/.test(n) && !isGenerated(p)) files.push(p); } })(dir);
 
 const godFiles = [];
 const godFns = [];
