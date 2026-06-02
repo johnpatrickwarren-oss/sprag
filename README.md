@@ -1,4 +1,7 @@
-# Architectural-invariant gate
+# sprag
+
+> A *sprag* is a one-way clutch — it lets a mechanism turn forward but locks against reverse motion.
+> That's the invariant: architecture only moves forward, never rots back.
 
 Enforce **human-authored architectural invariants** as a **gate on every change**, ratcheted against
 a baseline, so AI-built codebases don't silently rot (the k10s failure mode:
@@ -8,14 +11,14 @@ so no oracle-quality ceiling and no "who-verifies-the-verifier" problem.
 ## Install
 
 ```bash
-npm i -g arch-gate          # provides the `arch-gate` command
-npx arch-gate init <src-dir>
+npm i -g sprag              # provides the `sprag` command
+npx sprag init <src-dir>
 
 # Or straight from GitHub (no build step either way):
-#   npm i -g github:johnpatrickwarren-oss/arch-gate
+#   npm i -g github:johnpatrickwarren-oss/sprag
 ```
 
-Or clone and run directly: `git clone https://github.com/johnpatrickwarren-oss/arch-gate && cd arch-gate && npm install && node arch.mjs <cmd>`.
+Or clone and run directly: `git clone https://github.com/johnpatrickwarren-oss/sprag && cd sprag && npm install && node arch.mjs <cmd>`.
 
 ## Adopt on your repo (ratchet from where you are)
 
