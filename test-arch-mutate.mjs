@@ -59,5 +59,16 @@ const mutate = (d, extra = []) => {
   const withExc = mutate(d, ['--exclude', 'fixture.mjs']);
   expect('with --exclude fixture.mjs, only the tested module is mutated -> PASS 100%', withExc.code === 0 && /PASS: mutation score 100%/.test(withExc.out), `exit ${withExc.code}: ${withExc.out}`); }
 
+// 4. --since with an UNRESOLVABLE ref fails loudly (exit 64) instead of silently reporting "nothing to
+//    mutate" and passing. A gate that green-lights because git couldn't resolve the base (the classic
+//    CI mistake of diffing an unfetched `origin/<base>`) is worse than no gate.
+{ const d = mkdtempSync(join(tmpdir(), 'arch-mut-git-'));
+  const git = (...a) => spawnSync('git', a, { cwd: d });
+  git('init', '-q'); git('config', 'user.email', 't@t'); git('config', 'user.name', 't');
+  writeFileSync(join(d, 'm.mjs'), MOD); writeFileSync(join(d, 'm.test.mjs'), 'test\n');
+  git('add', '-A'); git('commit', '-qm', 'init');
+  const r = spawnSync('node', [MUT, d, '--test', 'true', '--since', 'no-such-ref', '--cwd', d], { encoding: 'utf8' });
+  expect('--since with an unresolvable ref fails loudly (exit 64), not a silent pass', r.status === 64 && /failed/.test(r.stdout + r.stderr), `exit ${r.status}: ${r.stdout}${r.stderr}`); }
+
 console.log(failed === 0 ? '\nPASS: mutation testing gates on EFFICACY — kills-bugs, not test count/coverage ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);

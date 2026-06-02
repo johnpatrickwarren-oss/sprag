@@ -17,7 +17,7 @@
 //   --exclude G   Comma-separated path globs to skip (e.g. 'corpus/**,test-*.mjs') — fixtures + tests
 //                 the .test./.spec. heuristic misses. `*` = within a segment, `**` = across segments.
 import { readdirSync, statSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
@@ -60,8 +60,12 @@ if (has('--all')) {
 } else {
   const ref = opt('--since', 'HEAD');
   const r = spawnSync('git', ['-C', repoRoot, 'diff', '--name-only', ref], { encoding: 'utf8' });
+  // Fail LOUDLY on a git error (e.g. an unfetched ref in CI). Conflating "git couldn't resolve the
+  // base" with "no files changed" would make the gate silently pass — worse than no gate.
+  if (r.status !== 0) { console.error(`mutate: 'git diff --name-only ${ref}' failed (exit ${r.status}). Is '${ref}' fetched? ${(r.stderr || '').trim()}`); process.exit(64); }
+  const dirAbs = resolve(dir); // git paths are repo-relative -> absolute; the dir scope must be too (dir='.' is the whole repo)
   targets = (r.stdout || '').split('\n').filter(Boolean).map((f) => join(repoRoot, f))
-    .filter((p) => p.startsWith(dir) && existsSync(p) && SRC.some((e) => p.endsWith(e)) && !isTest(p) && !isGen(p) && !excluded(p));
+    .filter((p) => p.startsWith(dirAbs) && existsSync(p) && SRC.some((e) => p.endsWith(e)) && !isTest(p) && !isGen(p) && !excluded(p));
 }
 if (!targets.length) { console.log('mutate: no changed source files (use --all, or --since <ref>). nothing to mutate.'); process.exit(0); }
 

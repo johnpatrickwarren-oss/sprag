@@ -43,8 +43,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - run: npm ci || npm install
+      # Use the PR base SHA (reachable thanks to fetch-depth: 0) — `origin/<base>` is not a resolvable
+      # ref in a PR checkout, and mutate now errors rather than silently passing on a bad base.
       - name: Mutate changed detector source vs base
-        run: node mutate.mjs . --since "origin/${{ github.base_ref }}" --test "npm test" --exclude "$EXCLUDE,$TOOLING" --threshold 60 --max-mutants 300
+        run: node mutate.mjs . --since "${{ github.event.pull_request.base.sha }}" --test "npm test" --exclude "$EXCLUDE,$TOOLING" --threshold 60 --max-mutants 300
 
   baseline:
     # Full audit: every source file. Report-only (|| true) — visibility + trend, not a hard gate. The
