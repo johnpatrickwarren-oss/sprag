@@ -11,8 +11,8 @@ so no oracle-quality ceiling and no "who-verifies-the-verifier" problem.
 ## Install
 
 ```bash
-npm i -g sprag              # provides the `sprag` command
-npx sprag init <src-dir>
+npm i -g @johnpwarren.dev/sprag    # provides the `sprag` command
+npx @johnpwarren.dev/sprag init <src-dir>
 
 # Or straight from GitHub (no build step either way):
 #   npm i -g github:johnpatrickwarren-oss/sprag
