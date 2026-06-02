@@ -28,6 +28,7 @@
     "arch-trend.mjs",
     "arch-loop.mjs",
     "scan.mjs",
+    "mutate.mjs",
     "install-hook.sh",
     "library/",
     "README.md",

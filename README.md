@@ -170,6 +170,19 @@ disciplines that still beat a strong base model — ships as `library/discipline
 reference it from your `CLAUDE.md` (`@arch-disciplines.md`) so the agent applies them in-context — the
 whole quality stack (mechanical floor + behavioral disciplines) with no orchestration harness.
 
+## Test efficacy, not test count (`arch mutate`)
+
+Requiring tests can devolve into *test theater* — more tests that don't catch more bugs (the classic "2× tests, no better results"). The count-independent answer is **mutation testing**: flip an operator (`&&`→`||`, `>=`→`>`, `true`→`false`…), re-run your suite, and see if a test *fails*. A mutant that survives is a bug your tests can't catch — a real gap that line-count and even line-coverage are blind to.
+
+```bash
+arch mutate <dir> --test "npm test" --since main      # mutate only files changed vs main (incremental)
+arch mutate <dir> --test "node --test test/*.test.mjs" --all --threshold 70   # full baseline run
+```
+
+It mutates **changed source files only by default** (git diff), runs your test command per mutant, and gates on the kill rate. It is **deterministic — zero model tokens** — but heavy (mutants × suite runtime, *not* offset by having fewer tests). So it's **opt-in and out-of-band**: run it in CI / nightly / pre-merge, *not* as the per-commit gate. The cheap AST checks (complexity, `require_tests`, god-files) stay on the hot path; `mutate` is the periodic *audit* that the tests you do have are worth keeping.
+
+**Rightsizing tests:** don't gate on count or a coverage-% target (both reward theater). The amount of testing a function needs is bounded by its cyclomatic complexity (`max_complexity` caps it → caps the tests needed); `require_tests` ensures presence; `arch mutate` confirms the tests that exist actually catch bugs. More tests is never the goal — *bug-catching* tests are.
+
 ## Honest scope
 
 - Mechanical + deterministic (no model) → no "who-verifies-the-verifier" problem; invariants are
