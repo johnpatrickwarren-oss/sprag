@@ -1,5 +1,5 @@
 {
-  "name": "arch-gate",
+  "name": "sprag",
   "version": "0.2.0",
   "type": "module",
   "private": false,
@@ -19,7 +19,7 @@
     "node": ">=20"
   },
   "bin": {
-    "arch-gate": "./arch.mjs"
+    "sprag": "arch.mjs"
   },
   "files": [
     "arch.mjs",
@@ -39,11 +39,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/johnpatrickwarren-oss/arch-gate.git"
+    "url": "git+https://github.com/johnpatrickwarren-oss/sprag.git"
   },
-  "homepage": "https://github.com/johnpatrickwarren-oss/arch-gate#readme",
+  "homepage": "https://github.com/johnpatrickwarren-oss/sprag#readme",
   "bugs": {
-    "url": "https://github.com/johnpatrickwarren-oss/arch-gate/issues"
+    "url": "https://github.com/johnpatrickwarren-oss/sprag/issues"
   },
   "dependencies": {
     "@ast-grep/lang-go": "^0.0.6",
