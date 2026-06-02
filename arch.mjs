@@ -12,12 +12,12 @@
 import { spawnSync } from 'node:child_process';
 import { readdirSync, writeFileSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const run = (cmd, args) => process.exit(spawnSync(cmd, args, { stdio: 'inherit' }).status ?? 1);
 
-function detectLang(dir) {
+export function detectLang(dir) {
   const count = { go: 0, ts: 0, js: 0 };
   const ext = { '.go': 'go', '.ts': 'ts', '.tsx': 'ts', '.js': 'js', '.mjs': 'js', '.cjs': 'js', '.jsx': 'js' };
   const walk = (d) => { for (const n of readdirSync(d)) { if (n === 'node_modules' || n === '.git' || n === 'vendor') continue; const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else { const e = '.' + n.split('.').pop(); if (ext[e]) count[ext[e]]++; } } };
@@ -26,7 +26,7 @@ function detectLang(dir) {
 }
 
 // `arch init`: scaffold a starting invariant set (generic, no-tuning checks) + a baseline.
-function init(argv) {
+export function init(argv) {
   const dir = argv.find((a) => !a.startsWith('--'));
   if (!dir) { console.error('usage: arch init <dir> [--lang go|ts|js] [--out f]'); process.exit(64); }
   const li = argv.indexOf('--lang'); const lang = li >= 0 ? argv[li + 1] : detectLang(dir);
@@ -57,17 +57,21 @@ function init(argv) {
   process.exit(r.status ?? 1);
 }
 
-const [sub, ...rest] = process.argv.slice(2);
-switch (sub) {
-  case 'check': run('node', [join(HERE, 'arch-gate.mjs'), ...rest]); break;
-  case 'baseline': run('node', [join(HERE, 'arch-gate.mjs'), ...rest, '--baseline']); break;
-  case 'trend': run('node', [join(HERE, 'arch-trend.mjs'), ...rest]); break;
-  case 'loop': run('node', [join(HERE, 'arch-loop.mjs'), ...rest]); break;
-  case 'install-hook': run('bash', [join(HERE, 'install-hook.sh'), ...rest]); break;
-  case 'scan': run('node', [join(HERE, 'scan.mjs'), ...rest]); break;
-  case 'mutate': run('node', [join(HERE, 'mutate.mjs'), ...rest]); break;
-  case 'init': init(rest); break;
-  default:
-    console.error('usage: arch <check|baseline|trend|loop|install-hook|scan|mutate|init> ...  (see header of arch.mjs)');
-    process.exit(64);
+function cli() {
+  const [sub, ...rest] = process.argv.slice(2);
+  switch (sub) {
+    case 'check': run('node', [join(HERE, 'arch-gate.mjs'), ...rest]); break;
+    case 'baseline': run('node', [join(HERE, 'arch-gate.mjs'), ...rest, '--baseline']); break;
+    case 'trend': run('node', [join(HERE, 'arch-trend.mjs'), ...rest]); break;
+    case 'loop': run('node', [join(HERE, 'arch-loop.mjs'), ...rest]); break;
+    case 'install-hook': run('bash', [join(HERE, 'install-hook.sh'), ...rest]); break;
+    case 'scan': run('node', [join(HERE, 'scan.mjs'), ...rest]); break;
+    case 'mutate': run('node', [join(HERE, 'mutate.mjs'), ...rest]); break;
+    case 'init': init(rest); break;
+    default:
+      console.error('usage: arch <check|baseline|trend|loop|install-hook|scan|mutate|init> ...  (see header of arch.mjs)');
+      process.exit(64);
+  }
 }
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) cli();
