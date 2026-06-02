@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  isGeneratedFile, oversizedFilesCount, moduleFaninCount, stripComments,
+  isGeneratedFile, isSkippedDir, oversizedFilesCount, moduleFaninCount, stripComments,
   forbidPathRefCount, timeBombTestCount, untestedModuleCount,
 } from './metrics.mjs';
 
@@ -19,6 +19,18 @@ const tmp = () => mkdtempSync(join(tmpdir(), 'arch-met-'));
 const mk = (d, rel, body) => { const p = join(d, rel); mkdirSync(join(p, '..'), { recursive: true }); writeFileSync(p, body); return p; };
 const lines = (n) => 'x\n'.repeat(n);
 const MISSING = '/no/such/arch-gate/dir';
+
+// ── isSkippedDir: dependency / VCS / Python-cache dirs ────────────────────────────
+{ eq('skip: node_modules', isSkippedDir('node_modules'), true);
+  eq('skip: .git', isSkippedDir('.git'), true);
+  eq('skip: vendor', isSkippedDir('vendor'), true);
+  eq('skip: Python .venv', isSkippedDir('.venv'), true);
+  eq('skip: venv', isSkippedDir('venv'), true);
+  eq('skip: site-packages', isSkippedDir('site-packages'), true);
+  eq('skip: __pycache__', isSkippedDir('__pycache__'), true);
+  eq('skip: a *.egg-info dir (suffix match)', isSkippedDir('runway.egg-info'), true);
+  eq('skip: a real source dir is NOT skipped', isSkippedDir('runway_core'), false);
+  eq('skip: "venvy" is not a false suffix/substring match', isSkippedDir('venvy'), false); }
 
 // ── isGeneratedFile ──────────────────────────────────────────────────────────────
 { const d = tmp(); mk(d, 'a.ts', 'x'); // sibling so a.js counts as tsc output
@@ -32,9 +44,10 @@ const MISSING = '/no/such/arch-gate/dir';
   const d = tmp();
   mk(d, 'big.ts', lines(40)); mk(d, 'small.ts', lines(5));
   eq('oversized: one file over the limit', oversizedFilesCount(d, 20), 1);
-  const d2 = tmp(); // every entry of the skip-list (node_modules / .git / vendor) must be skipped
+  const d2 = tmp(); // every entry of the skip-list (JS deps + VCS + Python venv/cache) must be skipped
   mk(d2, 'node_modules/huge.ts', lines(40)); mk(d2, 'vendor/huge.ts', lines(40)); mk(d2, '.git/huge.ts', lines(40));
-  eq('oversized: files under node_modules / vendor / .git are all skipped', oversizedFilesCount(d2, 20), 0);
+  mk(d2, '.venv/lib/site-packages/huge.py', lines(40)); mk(d2, '__pycache__/huge.py', lines(40)); mk(d2, 'pkg.egg-info/huge.py', lines(40));
+  eq('oversized: files under node_modules / vendor / .git / .venv / __pycache__ / *.egg-info are all skipped', oversizedFilesCount(d2, 20), 0);
   const d3 = tmp();
   mk(d3, 'gen.ts', lines(2)); mk(d3, 'gen.js', lines(40)); // gen.js is tsc output of gen.ts
   eq('oversized: a generated .js (has .ts sibling) is not counted', oversizedFilesCount(d3, 20), 0);

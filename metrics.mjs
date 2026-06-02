@@ -3,6 +3,8 @@
 // own checks). Every walker reads only stable in-tree source — skips node_modules/.git/vendor and
 // generated build artifacts — so the metrics are deterministic regardless of whether the tree has
 // been built. (godFunctionCount stays in arch-gate.mjs because it needs the ast-grep parser.)
+// "Skips ... deps/vcs" below means isSkippedDir: node_modules, .venv/venv/site-packages/__pycache__
+// (+ .egg-info), .git/vendor — see SKIP_DIRS.
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
 import { join, dirname, resolve as pathResolve } from 'node:path';
 
@@ -19,6 +21,18 @@ export function isGeneratedFile(p) {
   return !!m && (existsSync(m[1] + '.ts') || existsSync(m[1] + '.tsx'));
 }
 
+// Dependency / VCS / tool-cache directories that never hold authored project source. Skipping them
+// keeps every metric on hand-written code: otherwise a Python `.venv` of vendored site-packages (or a
+// JS `node_modules`) swamps the counts — a naive scan of a Python repo reported ~1800 fake God files
+// from playwright/altair/plotly inside `.venv`. This is node_modules' equivalent for the Python world.
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'vendor',
+  '.venv', 'venv', 'site-packages', '__pycache__', '.tox', '.eggs',
+]);
+export function isSkippedDir(name) {
+  return SKIP_DIRS.has(name) || name.endsWith('.egg-info');
+}
+
 // oversized_files (generic, language-agnostic, no per-project tuning): count source files whose
 // line count exceeds maxLines — the "God file" smell. Recurses, skipping deps/vcs/generated.
 const SRC_EXTS = ['.go', '.ts', '.tsx', '.js', '.mjs', '.jsx', '.py', '.rs', '.java', '.rb', '.sh'];
@@ -27,7 +41,7 @@ export function oversizedFilesCount(dir, maxLines) {
   let n = 0;
   const walk = (d) => {
     for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      if (isSkippedDir(name)) continue;
       const p = join(d, name);
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
@@ -48,7 +62,7 @@ export function moduleFaninCount(dir, maxFanin) {
   const files = [];
   const walk = (d) => {
     for (const n of readdirSync(d)) {
-      if (n === 'node_modules' || n === '.git' || n === 'vendor') continue;
+      if (isSkippedDir(n)) continue;
       const p = join(d, n);
       if (statSync(p).isDirectory()) walk(p);
       else if (FANIN_EXTS.some((e) => n.endsWith(e)) && !isGeneratedFile(p)) files.push(p);
@@ -96,7 +110,7 @@ export function forbidPathRefCount(dir, check, invId) {
   let n = 0;
   const walk = (d) => {
     for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      if (isSkippedDir(name)) continue;
       const p = join(d, name);
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
@@ -126,7 +140,7 @@ export function timeBombTestCount(dir, check, invId) {
   let n = 0;
   const walk = (d) => {
     for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      if (isSkippedDir(name)) continue;
       const p = join(d, name);
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
@@ -168,7 +182,7 @@ export function untestedModuleCount(dir, check, invId) {
   const covered = new Set();
   const collect = (d) => {
     for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      if (isSkippedDir(name)) continue;
       const p = join(d, name);
       if (statSync(p).isDirectory()) { collect(p); continue; }
       const b = testCovers(name);
@@ -180,7 +194,7 @@ export function untestedModuleCount(dir, check, invId) {
   let n = 0;
   const walk = (d) => {
     for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name === '.git' || name === 'vendor') continue;
+      if (isSkippedDir(name)) continue;
       const p = join(d, name);
       if (statSync(p).isDirectory()) { walk(p); continue; }
       if (!CODE_EXTS.some((e) => name.endsWith(e))) continue;
