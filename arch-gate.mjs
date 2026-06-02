@@ -302,7 +302,7 @@ export function metricValue(inv, src, dir) {
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const o = { dir: null, writeBaseline: false, baselineOut: null, baselineIn: null, json: false, invFile: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -317,7 +317,7 @@ function parseArgs(argv) {
   return o;
 }
 
-function computeViolations(invariants, metrics, baseline) {
+export function computeViolations(invariants, metrics, baseline) {
   const violations = [];
   for (const inv of invariants) {
     const v = metrics[inv.id];

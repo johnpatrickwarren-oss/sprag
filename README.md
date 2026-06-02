@@ -177,9 +177,14 @@ Requiring tests can devolve into *test theater* — more tests that don't catch 
 ```bash
 arch mutate <dir> --test "npm test" --since main      # mutate only files changed vs main (incremental)
 arch mutate <dir> --test "node --test test/*.test.mjs" --all --threshold 70   # full baseline run
+arch mutate . --all --test "npm test" --exclude 'corpus/**,test-*.mjs'   # skip fixtures + non-.test. suites
 ```
 
 It mutates **changed source files only by default** (git diff), runs your test command per mutant, and gates on the kill rate. It is **deterministic — zero model tokens** — but heavy (mutants × suite runtime, *not* offset by having fewer tests). So it's **opt-in and out-of-band**: run it in CI / nightly / pre-merge, *not* as the per-commit gate. The cheap AST checks (complexity, `require_tests`, god-files) stay on the hot path; `mutate` is the periodic *audit* that the tests you do have are worth keeping.
+
+Test files are auto-skipped when they use the `.test.`/`.spec.` convention; use **`--exclude <globs>`** for anything the heuristic misses — in-repo **fixtures** (deliberately-broken code used as test inputs) and tests named another way (`test-*.mjs`, etc.). Globs are matched against the repo-relative path (`*` = within a segment, `**` = across). Mutating a fixture or a test file measures nothing, so excluding them keeps the score honest.
+
+**Wired into CI** ([`.github/workflows/mutate.yml`](.github/workflows/mutate.yml)): every PR runs an *incremental* mutate over just the source it changed (gating — new code must ship tests that kill its mutants), and a weekly schedule runs the *full* baseline as a report. This repo dogfoods it.
 
 **Rightsizing tests:** don't gate on count or a coverage-% target (both reward theater). The amount of testing a function needs is bounded by its cyclomatic complexity (`max_complexity` caps it → caps the tests needed); `require_tests` ensures presence; `arch mutate` confirms the tests that exist actually catch bugs. More tests is never the goal — *bug-catching* tests are.
 

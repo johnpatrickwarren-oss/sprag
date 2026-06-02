@@ -43,5 +43,21 @@ const mutate = (d, extra = []) => {
   const r = mutate(d);
   expect('weak (coverage-only, no-assert) suite -> BLOCKED on low mutation score', r.code === 3 && /mutation score 0%/.test(r.out), `exit ${r.code}: ${r.out}`); }
 
+// 3. --exclude: a non-source FIXTURE file (untested, so its mutants survive) is skipped, so the score
+//    reflects only the real module. Without the exclude the fixture drags the score down -> BLOCKED;
+//    with it, the strong suite scores 100% -> PASS. This is what lets mutate run on a repo that holds
+//    test fixtures or uses a test-naming convention the .test./.spec. heuristic misses.
+{ const d = mk(
+  `import { test } from 'node:test'; import assert from 'node:assert/strict';\n`
+  + `import { ge, both, flag } from './m.mjs';\n`
+  + `test('ge', () => { assert.equal(ge(2, 2), true); assert.equal(ge(1, 2), false); });\n`
+  + `test('both', () => { assert.equal(both(true, false), false); assert.equal(both(true, true), true); });\n`
+  + `test('flag', () => { assert.equal(flag(), true); });\n`);
+  writeFileSync(join(d, 'fixture.mjs'), 'export const x = (a, b) => a >= b && b === 1;\n'); // untested source
+  const without = mutate(d);
+  expect('without --exclude, untested fixture drags score down -> BLOCKED', without.code === 3, `exit ${without.code}: ${without.out}`);
+  const withExc = mutate(d, ['--exclude', 'fixture.mjs']);
+  expect('with --exclude fixture.mjs, only the tested module is mutated -> PASS 100%', withExc.code === 0 && /PASS: mutation score 100%/.test(withExc.out), `exit ${withExc.code}: ${withExc.out}`); }
+
 console.log(failed === 0 ? '\nPASS: mutation testing gates on EFFICACY — kills-bugs, not test count/coverage ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);

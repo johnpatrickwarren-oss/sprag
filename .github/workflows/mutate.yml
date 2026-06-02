@@ -1,0 +1,61 @@
+name: mutate
+# Mutation testing = test EFFICACY (do the tests CATCH bugs?), the one signal a suite can't game with
+# volume. Heavy (mutants x suite runtime), so it runs OUT-OF-BAND, never on the per-commit hot path:
+#   - pull_request: INCREMENTAL gate over the DETECTOR source the PR changed (the product's correctness
+#                   core — arch-gate.mjs + metrics.mjs, both measured ~77-87% by direct unit tests).
+#   - schedule / workflow_dispatch: FULL baseline over ALL source, report-only — the periodic audit
+#                   that surfaces the lower-coverage CLI/tooling as tracked debt (repo aggregate ~55%).
+# Why the PR gate is scoped to the detectors: the CLI/tooling files (arch.mjs, scan/loop/trend, the
+# mutate engine itself) are integration-tested but mutation-thin; hard-gating them at a meaningful
+# threshold would false-fire on routine edits, and a gate people route around is a dead gate. So we
+# gate where efficacy is load-bearing and high, and REPORT everywhere (the weekly run tracks the rest).
+on:
+  pull_request:
+  schedule:
+    - cron: '0 7 * * 1' # 07:00 UTC every Monday — weekly full audit
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Min mutation score % for the full-baseline report'
+        default: '50'
+
+concurrency:
+  group: mutate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Fixtures (deliberately-bad code used as test INPUTS) + the test suites themselves are not product
+  # source — mutating them measures nothing. The .test./.spec. heuristic misses this repo's test-*.mjs.
+  EXCLUDE: 'corpus/**,sample-ts/**,sample/**,test-*.mjs,run-tests.mjs'
+  # The PR gate additionally skips the CLI/tooling so it gates only the detector logic (see header).
+  TOOLING: 'arch.mjs,arch-loop.mjs,arch-trend.mjs,scan.mjs,mutate.mjs'
+
+jobs:
+  incremental:
+    # Per-PR efficacy gate on the detector source this PR touched (threshold 60 = mutate's default;
+    # arch-gate.mjs/metrics.mjs sit well above it, so this blocks a real regression in changed detector
+    # code — or a new untested detector — without false-firing).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 } # full history so `git diff origin/<base>` resolves
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci || npm install
+      - name: Mutate changed detector source vs base
+        run: node mutate.mjs . --since "origin/${{ github.base_ref }}" --test "npm test" --exclude "$EXCLUDE,$TOOLING" --threshold 60 --max-mutants 300
+
+  baseline:
+    # Full audit: every source file. Report-only (|| true) — visibility + trend, not a hard gate. The
+    # printed score + survivor list is the signal; the threshold (50, just under today's ~55%) only
+    # colors the PASS/✗ line and would flag a real backslide.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci || npm install
+      - name: Mutate all source (full baseline)
+        run: node mutate.mjs . --all --test "npm test" --exclude "$EXCLUDE" --threshold "${{ github.event.inputs.threshold || '50' }}" --max-mutants 600 || true
