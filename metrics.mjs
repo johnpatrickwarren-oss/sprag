@@ -21,13 +21,17 @@ export function isGeneratedFile(p) {
   return !!m && (existsSync(m[1] + '.ts') || existsSync(m[1] + '.tsx'));
 }
 
-// Dependency / VCS / tool-cache directories that never hold authored project source. Skipping them
-// keeps every metric on hand-written code: otherwise a Python `.venv` of vendored site-packages (or a
-// JS `node_modules`) swamps the counts — a naive scan of a Python repo reported ~1800 fake God files
-// from playwright/altair/plotly inside `.venv`. This is node_modules' equivalent for the Python world.
+// Dependency / VCS / tool-cache / BUILD-OUTPUT directories that never hold authored project source.
+// Skipping them keeps every metric on hand-written code: otherwise a Python `.venv` of vendored
+// site-packages (or a JS `node_modules`) swamps the counts — a naive scan reported ~1800 fake God
+// files from `.venv`. Build dirs (`dist`/`build`/...) matter for the RATCHET specifically: they are
+// gitignored, so they're absent from the `git archive HEAD` baseline but present in the working tree —
+// counting them makes the working scan exceed the baseline and the ratchet false-regress on every
+// commit. (Mirrors scan.mjs's skip-list.)
 const SKIP_DIRS = new Set([
   'node_modules', '.git', 'vendor',
   '.venv', 'venv', 'site-packages', '__pycache__', '.tox', '.eggs',
+  'dist', 'build', 'coverage', '.next', 'out', '.astro',
 ]);
 export function isSkippedDir(name) {
   return SKIP_DIRS.has(name) || name.endsWith('.egg-info');

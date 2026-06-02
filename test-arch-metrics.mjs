@@ -28,6 +28,9 @@ const MISSING = '/no/such/arch-gate/dir';
   eq('skip: venv', isSkippedDir('venv'), true);
   eq('skip: site-packages', isSkippedDir('site-packages'), true);
   eq('skip: __pycache__', isSkippedDir('__pycache__'), true);
+  eq('skip: dist build output (gitignored -> would false-regress the ratchet)', isSkippedDir('dist'), true);
+  eq('skip: build output dir', isSkippedDir('build'), true);
+  eq('skip: coverage output dir', isSkippedDir('coverage'), true);
   eq('skip: a *.egg-info dir (suffix match)', isSkippedDir('runway.egg-info'), true);
   eq('skip: a real source dir is NOT skipped', isSkippedDir('runway_core'), false);
   eq('skip: "venvy" is not a false suffix/substring match', isSkippedDir('venvy'), false); }
