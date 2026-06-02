@@ -2,9 +2,11 @@
 // scan.mjs <dir> [--name N] — survey a repo for "God code": oversized files, God functions, and
 // coupling hubs (modules imported by many files). Reporting mode (lists offenders), not a gate.
 //   thresholds: file >FILE lines, function >FUNC lines, module fan-in >HUB.
-import { parse } from '@ast-grep/napi';
+import { parse, registerDynamicLanguage } from '@ast-grep/napi';
 import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative, dirname, resolve as rsv } from 'node:path';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 // generated/bundled code (not hand-written) — exclude so counts reflect real source.
 function isGenerated(p) {
@@ -29,18 +31,29 @@ const godFiles = [];
 const godFns = [];
 const fanin = new Map();
 const importRe = /(?:\bfrom|\brequire\(\s*|\bimport\(\s*)\s*['"]([^'"]+)['"]/g;
-const FN_KINDS = ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'];
+// God-function kinds per language — real AST for Go/Python too, not just JS/TS (mirrors arch-gate.mjs).
+const FN_JS = ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'];
+const FN_KINDS = { go: ['function_declaration', 'method_declaration', 'func_literal'], python: ['function_definition'], ts: FN_JS };
+let _goReg = false, _pyReg = false;
+function sgRoot(src, lang) {
+  if (lang === 'go') { if (!_goReg) { registerDynamicLanguage({ go: require('@ast-grep/lang-go') }); _goReg = true; } return parse('go', src).root(); }
+  if (lang === 'python') { if (!_pyReg) { registerDynamicLanguage({ python: require('@ast-grep/lang-python') }); _pyReg = true; } return parse('python', src).root(); }
+  return parse('Tsx', src).root();
+}
+const langOf = (f) => (f.endsWith('.go') ? 'go' : f.endsWith('.py') ? 'python' : 'ts');
 
 for (const f of files) {
   const src = readFileSync(f, 'utf8');
   const lines = src.split('\n').length;
   if (lines > FILE) godFiles.push({ f: relative(dir, f), lines });
-  // God functions + fan-in only for JS/TS (ast-grep Tsx)
+  // God functions: real AST for JS/TS, Go, AND Python (was JS/TS-only -> silently 0 for py/go).
+  const lang = langOf(f);
+  try {
+    const root = sgRoot(src, lang);
+    for (const k of (FN_KINDS[lang] || FN_KINDS.ts)) for (const fn of root.findAll({ rule: { kind: k } })) { const r = fn.range(); const len = r.end.line - r.start.line + 1; if (len > FUNC) godFns.push({ f: relative(dir, f), line: r.start.line + 1, len }); }
+  } catch { /* parse error: skip */ }
+  // Coupling fan-in is relative-import based -> JS/TS family only (Python/Go use different import models).
   if (JSX.some((e) => f.endsWith(e))) {
-    try {
-      const root = parse('Tsx', src).root();
-      for (const k of FN_KINDS) for (const fn of root.findAll({ rule: { kind: k } })) { const r = fn.range(); const len = r.end.line - r.start.line + 1; if (len > FUNC) godFns.push({ f: relative(dir, f), line: r.start.line + 1, len }); }
-    } catch { /* parse error: skip */ }
     let m; while ((m = importRe.exec(src))) { const s = m[1]; if (!s.startsWith('.')) continue; const key = rsv(dirname(f), s).replace(/\.(ts|tsx|js|mjs|cjs|jsx)$/, ''); (fanin.get(key) || fanin.set(key, new Set()).get(key)).add(f); } }
 }
 const hubs = [...fanin.entries()].map(([k, v]) => ({ mod: relative(dir, k), n: v.size })).filter((h) => h.n > HUB).sort((a, b) => b.n - a.n);
@@ -50,5 +63,5 @@ const total = godFiles.length + godFns.length + hubs.length;
 console.log(`\n=== ${name} === (${files.length} source files; ${total} God-code findings)`);
 console.log(`God files (>${FILE} lines): ${godFiles.length}`); godFiles.slice(0, 6).forEach((x) => console.log(`   ${x.lines}  ${x.f}`));
 console.log(`God functions (>${FUNC} lines): ${godFns.length}`); godFns.slice(0, 6).forEach((x) => console.log(`   ${x.len}  ${x.f}:${x.line}`));
-console.log(`Coupling hubs (fan-in >${HUB}): ${hubs.length}`); hubs.slice(0, 6).forEach((x) => console.log(`   ${x.n}  ${x.mod}`));
+console.log(`Coupling hubs (fan-in >${HUB}, JS/TS imports): ${hubs.length}`); hubs.slice(0, 6).forEach((x) => console.log(`   ${x.n}  ${x.mod}`));
 console.log(JSON.stringify({ scan: name, files: files.length, godFiles: godFiles.length, godFns: godFns.length, hubs: hubs.length }));
