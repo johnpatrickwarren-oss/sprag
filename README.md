@@ -8,12 +8,11 @@ so no oracle-quality ceiling and no "who-verifies-the-verifier" problem.
 ## Install
 
 ```bash
-# Install straight from GitHub (works today — no build step):
-npm i -g github:johnpatrickwarren-oss/arch-gate     # provides the `arch-gate` command
+npm i -g arch-gate          # provides the `arch-gate` command
+npx arch-gate init <src-dir>
 
-# Once published to npm:
-#   npm i -g @johnpatrickwarren-oss/arch-gate
-#   npx @johnpatrickwarren-oss/arch-gate init <src-dir>
+# Or straight from GitHub (no build step either way):
+#   npm i -g github:johnpatrickwarren-oss/arch-gate
 ```
 
 Or clone and run directly: `git clone https://github.com/johnpatrickwarren-oss/arch-gate && cd arch-gate && npm install && node arch.mjs <cmd>`.
