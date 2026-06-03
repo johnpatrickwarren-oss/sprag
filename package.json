@@ -60,6 +60,8 @@
   "scripts": {
     "test": "node run-tests.mjs",
     "gate": "node arch-gate.mjs",
-    "arch": "node arch.mjs"
+    "arch": "node arch.mjs",
+    "mutate": "node mutate.mjs . --test \"node run-tests.mjs\" --all",
+    "mutate:changed": "node mutate.mjs . --since origin/main --test \"node run-tests.mjs\""
   }
 }
