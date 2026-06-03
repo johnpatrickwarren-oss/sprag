@@ -31,5 +31,21 @@ const run = (cmd) => { const r = spawnSync('node', [PROP, d, '--prop', cmd, '--t
 { const r = run(wrong);
   expect('property that does not hold REJECTED (wrong, or real bug)', r.code === 3 && /does not hold/i.test(r.out), `exit ${r.code}: ${r.out}`); }
 
-console.log(failed === 0 ? '\nPASS: arch property accepts strong invariants, rejects weak/tautological + non-holding ones ✅' : `\nFAIL: ${failed}`);
+// (heuristic) a property that RESTATES the implementation accepts (holds + kills mutants by construction)
+// but WARNS — and --strict-restatement turns the warning into a REJECT.
+{
+  mkdirSync(join(d, 'src2'));
+  writeFileSync(join(d, 'src2', 'classify.js'), 'export const classify = (s) => /^[a-z]+$/.test(s) && s.length >= 3 && s.length <= 20;\n');
+  writeFileSync(join(d, 'p-restate.mjs'),
+    "import { classify } from './src2/classify.js';\n" +
+    "const impl = (s) => /^[a-z]+$/.test(s) && s.length >= 3 && s.length <= 20;\n" +
+    "process.exit(['ab','abc','abcdefghijklmnopqrst','ABC','aaaaaaaaaaaaaaaaaaaaaaaaa'].every((s) => classify(s) === impl(s)) ? 0 : 1);\n");
+  const go = (extra) => { const r = spawnSync('node', [PROP, d, '--prop', 'node p-restate.mjs', '--target', join(d, 'src2'), '--min-kill', '50', '--all', ...extra], { encoding: 'utf8' }); return { code: r.status, out: (r.stdout || '') + (r.stderr || '') }; };
+  const w = go([]);
+  expect('restating property ACCEPTS but WARNS (impl overlap)', w.code === 0 && /WARNING/.test(w.out) && /RESTATES the impl/i.test(w.out), `exit ${w.code}: ${w.out}`);
+  const s = go(['--strict-restatement']);
+  expect('--strict-restatement turns restatement into REJECT', s.code === 3 && /restates the impl/i.test(s.out), `exit ${s.code}: ${s.out}`);
+}
+
+console.log(failed === 0 ? '\nPASS: arch property accepts strong invariants, rejects weak/tautological + non-holding, warns on restatement ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
