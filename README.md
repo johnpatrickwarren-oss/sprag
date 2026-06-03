@@ -8,6 +8,25 @@ a baseline, so AI-built codebases don't silently rot (the k10s failure mode:
 https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/). Mechanical + deterministic (no model),
 so no oracle-quality ceiling and no "who-verifies-the-verifier" problem.
 
+And — the part nothing else does — when an AI agent is told *"make the gate pass,"* it can't cheat by
+silencing the gate. `node demo-threat-model.mjs` watches it try, and fail:
+
+```
+  told "make the gate pass", the agent tries to silence the gate instead of fixing it:
+
+  🛡  BLOCKED  raise the limit (maxLines 20 → 50)
+  🛡  BLOCKED  re-baseline (0 → 1, grandfather the debt)
+  🛡  BLOCKED  delete the rule
+  🛡  BLOCKED  downgrade severity (block → warn)
+  🛡  BLOCKED  stage-then-revert the relaxed config
+  🛡  BLOCKED  kill the analysis engine
+
+  Every bypass blocked; the gate can only be passed honestly. ✅
+```
+
+The only two ways to green: **fix the code**, or **loosen it on the record** (`ARCH_ALLOW_RELAX=1`,
+which still prints what it loosened). Full bypass catalogue + honest limits: **[THREAT-MODEL.md](THREAT-MODEL.md)**.
+
 ### The part nothing else does: a gate that can't be silently weakened
 
 Every quality gate has two silent-failure modes — and an AI agent told *"make the gate pass"* reaches
@@ -28,7 +47,8 @@ of the code is also trying to get past the gate, is **gating the gate** against 
 no-op: by accident (dead engine) and on purpose (relaxed config).
 
 See **[THREAT-MODEL.md](THREAT-MODEL.md)** for the full bypass catalogue and a runnable, self-verifying
-proof — `node demo-threat-model.mjs` watches an agent try every shortcut and sprag block each one.
+proof — `node demo-threat-model.mjs` watches an agent try every shortcut and sprag block each one. The
+idea, in essay form: **[The gate that can't be weakened](the-gate-that-cant-be-weakened.md)**.
 
 ## Install
 
