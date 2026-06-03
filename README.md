@@ -122,8 +122,11 @@ Checks are computed by a per-invariant **engine** (`engine` + `lang` fields):
 
 Built-in check kinds: `struct_field_count`, `switch_case_count`, `magic_index_count`, `forbid_pattern`,
 `oversized_files`, `max_function_lines`, `max_complexity`, `module_fanin`, `scope_diff`, `forbid_path`,
-`time_bomb_tests`, `require_tests`. For anything bespoke, the **`ast_grep_rule`** kind takes a raw
-ast-grep rule object, so a project can encode its *own* architectural rules in JSON with no code changes.
+`time_bomb_tests`, `require_tests`, `dependency_count`, `unlocked_dependencies`, `secret_scan`,
+`config_relaxations` (see *Beyond structure* below). For anything bespoke, **`ast_grep_rule`** takes a raw
+ast-grep rule object (matched on the top-level dir) and **`ast_grep_tree`** matches the same rule
+**recursively, per file, over the whole tree** — so a project can encode its *own* architectural rules in
+JSON, on a nested `src/`, with no code changes.
 
 ### On line counts vs. complexity
 
@@ -161,10 +164,44 @@ the metric checks are blind to (learned by refactoring real repos where the rot 
   permanent suite. The signal requires *both* a git invocation and a frozen-ref marker, so a product
   SHA-256 hash test that never touches git is not falsely flagged.
 
+## Beyond structure: supply chain, types, secrets — and the gate's own integrity
+
+Architectural rot is one failure mode of AI-built code, not the only one. These deterministic,
+model-free, **offline** checks cover the rest — each as a ratchet or an absolute `max: 0`, all
+suppression-aware:
+
+- **Supply chain.** `dependency_count` `{ manifest, include }` ratchets the **declared dependency
+  surface** (npm / `go.mod` / `requirements.txt`) so it can't grow without a deliberate re-baseline.
+  `unlocked_dependencies` `{ manifest, lockfile, allow }` flags a dep **declared but absent from the
+  lockfile** — the offline fingerprint of a **hallucinated / slopsquatted** package, caught with no
+  registry call.
+- **Type integrity** (`ast_grep_tree`, recursive). **`no-new-any`** (`any` type), **`no-non-null-assertion`**
+  (the `x!` operator), **`no-ts-ignore`** (`@ts-ignore` / `@ts-nocheck` directives — *not*
+  `@ts-expect-error`, which self-removes). The #1 ways AI silences the type system instead of fixing it.
+- **Secrets.** `secret_scan` `{ dirs }` flags an inlined credential (provider key shapes + private-key
+  blocks + a guarded generic `secret="…"` rule that excludes env refs / placeholders / low-entropy).
+  Tracked files only — a gitignored `.env` is correctly invisible. High-precision by design (a `max:0`
+  gate can't cry wolf), so it's the always-on floor, not a replacement for a dedicated scanner.
+- **The gate's own integrity.** Two failure modes a gate has that nothing else watches:
+  - **Fail *closed*.** If the ast-grep engine can't load (not installed, wrong-platform binary, ABI
+    mismatch) the gate **errors (exit 2)** instead of silently scoring 0 and passing everything — a
+    no-op gate is the worst possible failure for a gate.
+  - **No silent relaxation** (`config_relaxations` `{ invariants, baseline, against }`, the
+    *meta-ratchet*). The config + baseline may only move **forward** (stricter) vs a git ref: a raised
+    `max`, dropped rule, downgraded severity, or raised baseline **blocks**. Because the rule lives in
+    the set it guards, deleting it counts too. A deliberate, reviewed loosening goes through
+    `ARCH_ALLOW_RELAX=1` — still printed, never silent. Together these stop the gate becoming a no-op
+    either by accident (dead engine) or on purpose (relaxed config).
+
+sprag enforces all of the above **on itself** (`invariants.harness.json`, run over the whole repo by
+the dogfood test on every `npm test`).
+
 ## Starter tenet library
 
-`library/tenets.json` ships the k10s **5 tenets** (T1–T5) plus **2 layering/test-rot invariants**
-(L1–L2) as ready-to-enable invariants. Copy the ones you want into your `invariants.json` and tune. See
+`library/tenets.json` ships the k10s **5 tenets** (T1–T5), **2 layering/test-rot invariants** (L1–L2),
+the complexity gate (Q1), the **supply-chain** pair (S1–S2), **type-strictness** (TS1–TS3), **secrets**
+(SEC1) and the **meta-ratchet** (M1) as ready-to-enable invariants. Copy the ones you want into your
+`invariants.json` and tune. See
 `library/README.md`.
 
 ## Engineering disciplines (the behavioral half)
