@@ -275,6 +275,24 @@
         "deterministic text scan, no model: provider key shapes (AWS/GCP/GitHub/Slack/Stripe/OpenAI/Anthropic/Google) + private-key blocks + a guarded generic secret=\"...\" rule (excludes env refs / placeholders / low-entropy). Only TRACKED files (a gitignored .env is invisible)."
       ],
       "tune": "Use an absolute `max: 0` — you never want even one. HIGH-PRECISION by design so it's safe at max:0; it favours misses over false alarms, so it is NOT a replacement for a dedicated secret scanner (gitleaks/trufflehog) or pre-receive hook — it's the always-on floor. Set `dirs` to scope the scan. A real secret is removed + ROTATED (it's compromised once committed); a genuine non-secret false positive is `// anchor:allow no-committed-secrets: <reason>`. Entropy-based detection is a follow-up."
+    },
+    {
+      "tenet": "B1 — Behavioral characterization (output must match the approved golden)",
+      "status": "ready",
+      "id": "behavior-unchanged",
+      "intent": "The highest-value behavioral failure of AI codegen is the refactor that silently CHANGES behavior — the structural metrics and the type system all stay green while the output drifts. Pin behavior: run a command, compare its output to a committed golden, block on any divergence. The oracle is the approved golden — MODEL-FREE, no LLM judge, no who-verifies-the-verifier. This is the first behavioral rung; deeper behavior (property-based, metamorphic, model-oracle) is future work.",
+      "check": {
+        "kind": "golden_outputs",
+        "cases": [
+          { "name": "cli --help", "cmd": "node cli.js --help", "golden": "test/golden/help.txt" }
+        ]
+      },
+      "max": 0,
+      "severity": "block",
+      "engines": [
+        "deterministic, no model: runs each `cmd` and diffs stdout (optionally +stderr) against its committed golden file"
+      ],
+      "tune": "EXECUTES the code, so unlike the static checks it is OPT-IN / OUT-OF-BAND (CI / pre-merge, where `arch mutate` lives) — NOT the per-commit hot path, and the commands must be DETERMINISTIC (a flaky command makes a flaky gate). Each case: `{ name?, cmd, golden, timeout?, includeStderr?, expectExit? }`. Record/refresh goldens with `ARCH_RECORD_GOLDEN=1` (writes current outputs); the committed golden diff IS the auditable approval — pair with a meta-ratchet over the golden dir so a golden can't be silently rewritten to bless drift. Best for: a CLI's output, a pure transform/serializer, a formatter — anything with a stable, meaningful output."
     }
   ]
 }

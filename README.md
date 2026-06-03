@@ -170,6 +170,15 @@ ast-grep rule object (matched on the top-level dir) and **`ast_grep_tree`** matc
 **recursively, per file, over the whole tree** — so a project can encode its *own* architectural rules in
 JSON, on a nested `src/`, with no code changes.
 
+One check is **behavioral, not structural**: **`golden_outputs`** runs human-declared commands and
+diffs their output against committed golden files — catching the *"AI refactor silently changed
+behavior"* failure with a model-free oracle (the approved output). It **executes the code**, so unlike
+every check above it is **opt-in / out-of-band** (CI / pre-merge, like `arch mutate`), *not* the
+per-commit hot path, and the commands must be deterministic. Record goldens with `ARCH_RECORD_GOLDEN=1`;
+the committed golden diff is the auditable approval. It's the first **behavioral** rung — deeper behavior
+(property-based, metamorphic) is future work, and a *model*-based oracle is deliberately out of scope to
+keep sprag deterministic and unweakenable.
+
 ### On line counts vs. complexity
 
 Raw line count (`max_function_lines`, `oversized_files`) is a *cheap proxy*, and the specific number is a

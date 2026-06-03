@@ -25,6 +25,7 @@ import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount
 import { secretScanCount } from './secret-scan.mjs';
 import { astgrepMetric, godFunctionCount, complexFunctionCount, astgrepTreeCount } from './ast-engine.mjs';
 import { configRelaxationCount } from './meta-ratchet.mjs';
+import { goldenMismatchCount } from './golden.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Default invariants: the repo ships a sample invariants.json (used by the tests); when absent
@@ -131,6 +132,7 @@ export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'unlocked_dependencies') return unlockedDependencyCount(dir, inv.check);
   if (inv.check.kind === 'config_relaxations') return configRelaxationCount(dir, inv.check);
   if (inv.check.kind === 'secret_scan') return secretScanCount(dir, inv.check, inv.id);
+  if (inv.check.kind === 'golden_outputs') return goldenMismatchCount(dir, inv.check);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check, dir);
   // God-function check: prefer the recursive per-file walk when we have a dir (correct on nested
   // trees); fall back to the concatenated single-parse when only `src` is available.

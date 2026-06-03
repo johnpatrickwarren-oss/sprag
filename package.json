@@ -27,6 +27,7 @@
     "ast-engine.mjs",
     "meta-ratchet.mjs",
     "secret-scan.mjs",
+    "golden.mjs",
     "metrics.mjs",
     "arch-trend.mjs",
     "arch-loop.mjs",
