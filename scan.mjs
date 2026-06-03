@@ -6,6 +6,7 @@ import { parse, registerDynamicLanguage } from '@ast-grep/napi';
 import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative, dirname, resolve as rsv } from 'node:path';
 import { createRequire } from 'node:module';
+import { gitTrackedSet } from './metrics.mjs';
 const require = createRequire(import.meta.url);
 
 // generated/bundled code (not hand-written) — exclude so counts reflect real source.
@@ -25,7 +26,8 @@ const JSX = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
 const CODE = [...JSX, '.go', '.py'];
 
 const files = [];
-(function walk(d) { for (const n of readdirSync(d)) { if (SKIP.has(n) || n.endsWith('.egg-info')) continue; const p = join(d, n); let st; try { st = statSync(p); } catch { continue; } if (st.isDirectory()) walk(p); else if (CODE.some((e) => n.endsWith(e)) && !/\.d\.ts$/.test(n) && !isGenerated(p)) files.push(p); } })(dir);
+const tracked = gitTrackedSet(dir); // when dir is a git repo, survey only non-ignored files (match the gate)
+(function walk(d) { for (const n of readdirSync(d)) { if (SKIP.has(n) || n.endsWith('.egg-info')) continue; const p = join(d, n); let st; try { st = statSync(p); } catch { continue; } if (st.isDirectory()) walk(p); else if (CODE.some((e) => n.endsWith(e)) && !/\.d\.ts$/.test(n) && !isGenerated(p) && !(tracked && !tracked.has(rsv(p)))) files.push(p); } })(dir);
 
 const godFiles = [];
 const godFns = [];
