@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, realpat
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount, dependencyCount, unlockedDependencyCount } from './metrics.mjs';
-import { astgrepMetric, godFunctionCount, complexFunctionCount } from './ast-engine.mjs';
+import { astgrepMetric, godFunctionCount, complexFunctionCount, astgrepTreeCount } from './ast-engine.mjs';
 import { configRelaxationCount } from './meta-ratchet.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -138,6 +138,9 @@ export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'max_complexity' && dir && existsSync(dir)) {
     return complexFunctionCount(dir, inv.check.maxComplexity ?? 10, inv.lang || 'ts', inv.id);
   }
+  // ast_grep_tree: an author rule matched recursively across the whole tree (vs ast_grep_rule, which
+  // only sees the concatenated top-level dir) — powers the type-strictness tenets on a nested src/.
+  if (inv.check.kind === 'ast_grep_tree') return astgrepTreeCount(dir, inv.check.rule, inv.lang || 'ts', inv.id);
   return (inv.engine === 'ast-grep') ? astgrepMetric(inv, src) : heuristicMetric(inv, src);
 }
 

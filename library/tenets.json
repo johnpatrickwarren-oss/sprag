@@ -207,6 +207,58 @@
         "deterministic git diff of config vs ref (raised/removed max, removed rule, severity downgrade, raised baseline) — no model, no ast-grep"
       ],
       "tune": "Point `invariants`/`baseline` at your config paths (relative to the checked dir) and `against` at the ref to compare to (HEAD for a pre-commit hook comparing the working/staged config to the last commit). Use `max: 0`. A deliberate, REVIEWED loosening (you really do want to raise a threshold) is run with `ARCH_ALLOW_RELAX=1` — the relaxations are still printed to stderr, so the escape hatch is visible, never silent. Pair with fail-closed: together they stop the gate becoming a no-op either by accident (dead engine) or on purpose (relaxed config)."
+    },
+    {
+      "tenet": "TS1 — No new `any` (don't silence the type system)",
+      "status": "ready",
+      "id": "no-new-any",
+      "intent": "The `any` type is the #1 way AI codegen makes a type error disappear without fixing it — it switches OFF the type system locally, so the very guarantee you adopted TypeScript for stops holding. Ratchet `any` usages (the `as any` cast, the `: any` annotation, `<any>`, `any[]`) toward zero: existing ones are grandfathered, NEW ones block. Strong types make illegal states unrepresentable — a guarantee the AI can't violate — which beats adding more runtime checks.",
+      "check": {
+        "kind": "ast_grep_tree",
+        "lang": "ts",
+        "rule": { "kind": "predefined_type", "regex": "^any$" }
+      },
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "ast-grep (TS/JS), recursive per-file over the whole tree — counts every `any` type node, deterministic, no model"
+      ],
+      "tune": "Ratchet (no absolute `max`) grandfathers today's `any`s and blocks new ones; `max: 0` on a greenfield repo forbids them entirely. A genuinely-unavoidable `any` (an untyped third-party boundary) is a deliberate `// anchor:allow no-new-any: <reason>` on that line — visible, not silent. Set `lang` to `ts` (covers .ts/.tsx/.js/.jsx)."
+    },
+    {
+      "tenet": "TS2 — No non-null assertions (`!`) (don't lie to the compiler)",
+      "status": "ready",
+      "id": "no-non-null-assertion",
+      "intent": "The non-null assertion `x!` tells the compiler 'trust me, not null' with no check — a runtime `undefined` waiting to happen, and another favourite AI shortcut to clear a type error. Ratchet `x!` toward zero; prefer a real null check or a type that can't be null.",
+      "check": {
+        "kind": "ast_grep_tree",
+        "lang": "ts",
+        "rule": { "kind": "non_null_expression" }
+      },
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "ast-grep (TS/JS), recursive per-file — counts `non_null_expression` nodes (the `!` operator), not boolean `!`/`!=`",
+        "deterministic, no model"
+      ],
+      "tune": "Ratchet so existing assertions are grandfathered and new ones block. A justified assertion (provably-non-null after a guard the type system can't follow) is a `// anchor:allow no-non-null-assertion: <reason>`."
+    },
+    {
+      "tenet": "TS3 — No `@ts-ignore` / `@ts-nocheck` (don't disable the checker)",
+      "status": "ready",
+      "id": "no-ts-ignore",
+      "intent": "`@ts-ignore` and `@ts-nocheck` switch the type checker OFF for a line or a whole file — the bluntest escape hatch, and exactly what an AI reaches for when it can't make the types work. Ratchet toward zero. (Prefer `@ts-expect-error`, which at least FAILS when the underlying error is fixed, so it can't rot silently — it is intentionally NOT matched here.)",
+      "check": {
+        "kind": "ast_grep_tree",
+        "lang": "ts",
+        "rule": { "kind": "comment", "regex": "@ts-(ignore|nocheck)" }
+      },
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "ast-grep (TS/JS), recursive per-file — counts comment nodes matching @ts-ignore / @ts-nocheck (not @ts-expect-error)"
+      ],
+      "tune": "Ratchet so existing directives are grandfathered, new ones block. Migrate a real exception to `@ts-expect-error` (self-removing) or suppress with `// anchor:allow no-ts-ignore: <reason>`."
     }
   ]
 }

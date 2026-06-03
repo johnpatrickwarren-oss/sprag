@@ -165,6 +165,24 @@ export function godFunctionCount(dir, maxLines, lang, invId) {
   return over;
 }
 
+// Recursive author-rule counter: count matches of an arbitrary ast-grep `rule` across the WHOLE tree,
+// per file. This is the tree-walking sibling of astgrepMetric's `ast_grep_rule` (which only sees the
+// concatenated top-level dir) — so a project rule actually covers a nested src/ tree. Suppression-aware
+// via `anchor:allow <id>` on the match's start line. Powers the type-strictness tenets (count `any` /
+// non-null `!` / `@ts-ignore`) as pure config, and any other project-specific rule.
+export function astgrepTreeCount(dir, rule, lang, invId) {
+  const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  let n = 0;
+  walkParsed(dir, lang || 'ts', (root, src) => {
+    const lines = src.split('\n');
+    for (const node of root.findAll({ rule })) {
+      if (supRe && supRe.test(lines[node.range().start.line] || '')) continue;
+      n++;
+    }
+  });
+  return n;
+}
+
 // Cyclomatic-complexity decision nodes per language (control-flow branch points). A function's
 // complexity ≈ 1 + (decision nodes) + (short-circuit && / || / and / or) within it — a LESS-ARBITRARY
 // signal than raw line count: it flags BRANCHY functions (hard to follow + test; cyclomatic > ~10 is
