@@ -27,6 +27,9 @@ The *ratchet itself* is well-trodden (ArchUnit, Betterer, Sonar "Clean as You Co
 of the code is also trying to get past the gate, is **gating the gate** against the two ways it goes
 no-op: by accident (dead engine) and on purpose (relaxed config).
 
+See **[THREAT-MODEL.md](THREAT-MODEL.md)** for the full bypass catalogue and a runnable, self-verifying
+proof — `node demo-threat-model.mjs` watches an agent try every shortcut and sprag block each one.
+
 ## Install
 
 ```bash

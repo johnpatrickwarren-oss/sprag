@@ -33,8 +33,10 @@
     "scan.mjs",
     "mutate.mjs",
     "install-hook.sh",
+    "demo-threat-model.mjs",
     "library/",
     "README.md",
+    "THREAT-MODEL.md",
     "LICENSE"
   ],
   "publishConfig": {
