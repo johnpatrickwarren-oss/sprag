@@ -244,3 +244,97 @@ export function untestedModuleCount(dir, check, invId) {
   for (const r of roots) walk(r);
   return n;
 }
+
+// ── supply chain: dependency surface + hallucinated ("unlocked") deps ────────────
+// Two AI-codegen dependency failure modes the size/coupling/test metrics never see:
+//   (1) silent SURFACE GROWTH — every added third-party package enlarges the attack +
+//       maintenance surface. A ratchet makes each addition a deliberate, auditable re-baseline
+//       instead of a free side effect of "just npm-install it".
+//   (2) hallucinated / typo'd packages ("slopsquatting") — a dependency DECLARED in the manifest
+//       but never RESOLVED into the lockfile is the deterministic, OFFLINE fingerprint of a package
+//       that doesn't really exist (or was never installed). No registry call, no model.
+// Manifests live at known/top-level paths, so these dodge the nested-tree concatenation limit that
+// constrains the ast-grep pattern checks.
+function readJSON(p) { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } }
+
+// Declared dependency NAMES of a manifest (npm package.json / Go go.mod / pip requirements.txt).
+// `groups` only applies to package.json; go.mod & requirements.txt have no group concept.
+function declaredDeps(manifestPath, groups) {
+  const base = manifestPath.replace(/^.*\//, '');
+  const names = new Set();
+  if (base === 'package.json') {
+    const pkg = readJSON(manifestPath) || {};
+    for (const g of groups) for (const name of Object.keys(pkg[g] || {})) names.add(name);
+    return names;
+  }
+  if (base === 'go.mod') { // `require ( ... )` blocks + single `require x v` lines; skip // indirect
+    let inBlock = false;
+    for (const raw of readFileSync(manifestPath, 'utf8').split('\n')) {
+      const line = raw.trim();
+      if (!inBlock && /^require\s+\($/.test(line)) { inBlock = true; continue; }
+      if (inBlock && line === ')') { inBlock = false; continue; }
+      const m = inBlock ? line.match(/^(\S+)\s+v\S+(.*)$/) : line.match(/^require\s+(\S+)\s+v\S+(.*)$/);
+      if (m && !/\/\/\s*indirect/.test(m[2] || '')) names.add(m[1]);
+    }
+    return names;
+  }
+  if (base === 'requirements.txt') {
+    for (const raw of readFileSync(manifestPath, 'utf8').split('\n')) {
+      const t = raw.trim();
+      if (!t || t.startsWith('#') || t.startsWith('-')) continue; // skip blanks/comments/-r/-e flags
+      const m = t.match(/^([A-Za-z0-9._-]+)/);
+      if (m) names.add(m[1].toLowerCase());
+    }
+    return names;
+  }
+  return names;
+}
+
+// dependency_count (supply-chain surface): number of DECLARED third-party deps in a manifest.
+// Ratcheted, so the surface can't grow without a deliberate re-baseline. check:
+// { manifest?: 'package.json', include?: ['dependencies','optionalDependencies'] }.
+export function dependencyCount(dir, check) {
+  if (!dir) return 0;
+  const manifest = join(dir, check.manifest || 'package.json');
+  if (!existsSync(manifest)) return 0;
+  return declaredDeps(manifest, check.include || ['dependencies', 'optionalDependencies']).size;
+}
+
+// All package names RESOLVED in an npm lockfile — unioned across the v1 `dependencies` tree and the
+// v2/v3 `packages` map (keyed by `.../node_modules/<name>`), so any lockfile version is covered.
+function lockedNpmNames(lockPath) {
+  const lock = readJSON(lockPath);
+  const names = new Set();
+  if (!lock) return names;
+  if (lock.packages) {
+    for (const key of Object.keys(lock.packages)) {
+      const i = key.lastIndexOf('node_modules/');
+      if (i >= 0) names.add(key.slice(i + 'node_modules/'.length));
+    }
+  }
+  const walkV1 = (deps) => { for (const [name, v] of Object.entries(deps || {})) { names.add(name); if (v && v.dependencies) walkV1(v.dependencies); } };
+  if (lock.dependencies) walkV1(lock.dependencies);
+  return names;
+}
+
+// unlocked_dependencies (hallucination / slopsquat guard, npm): deps DECLARED in package.json but
+// ABSENT from the resolved lockfile — the offline fingerprint of a package that doesn't exist or was
+// never installed. Inert (0) unless BOTH manifest and lockfile are present. peerDependencies are
+// excluded by default (the consumer, not you, resolves them). check:
+// { manifest?: 'package.json', lockfile?: 'package-lock.json', include?: [...], allow?: [names] }.
+// Escape hatch: `allow` lists deliberately-unlocked names (e.g. a `file:`/`workspace:` local link) —
+// auditable in the invariants file, not silent. Use `max: 0` (not a ratchet).
+export function unlockedDependencyCount(dir, check) {
+  if (!dir) return 0;
+  const manifest = join(dir, check.manifest || 'package.json');
+  if (manifest.replace(/^.*\//, '') !== 'package.json') return 0; // npm-only for now
+  const lockPath = join(dir, check.lockfile || 'package-lock.json');
+  if (!existsSync(manifest) || !existsSync(lockPath)) return 0;
+  const allow = new Set(check.allow || []);
+  const locked = lockedNpmNames(lockPath);
+  let n = 0;
+  for (const name of declaredDeps(manifest, check.include || ['dependencies', 'devDependencies', 'optionalDependencies'])) {
+    if (!locked.has(name) && !allow.has(name)) n++;
+  }
+  return n;
+}

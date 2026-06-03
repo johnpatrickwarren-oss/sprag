@@ -24,6 +24,7 @@
   "files": [
     "arch.mjs",
     "arch-gate.mjs",
+    "ast-engine.mjs",
     "metrics.mjs",
     "arch-trend.mjs",
     "arch-loop.mjs",

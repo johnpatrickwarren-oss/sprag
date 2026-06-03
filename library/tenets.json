@@ -155,6 +155,40 @@
         "ast-grep (Go / TypeScript / JS / Python): per-function decision-node + &&/|| count from the same parse as the god-function check — deterministic, no model cost"
       ],
       "tune": "Set `maxComplexity` to your ceiling (10 = McCabe/NIST; 12–15 is a forgiving starter). Ratchet so existing complex functions are grandfathered and only NEW over-complex ones block. A legitimately-branchy-but-cohesive function (a flat dispatch, a parser) is a deliberate `// anchor:allow no-complex-functions: <reason>` — visible, not silent. The number is a convention; the ratchet + suppression are what make it fair. Pairs with / replaces a `max_function_lines` rule."
+    },
+    {
+      "tenet": "S1 — Bounded dependency surface (supply chain doesn't grow for free)",
+      "status": "ready",
+      "id": "dependency-surface",
+      "intent": "The third-party dependency surface must not grow silently. Every added package enlarges the attack + maintenance surface and is a place AI codegen reaches for instead of writing (or reusing) code. A ratchet makes each addition a deliberate, auditable re-baseline rather than a free side effect of 'just install it'. Counts DECLARED deps in a manifest — the size/coupling metrics never see this axis.",
+      "check": {
+        "kind": "dependency_count",
+        "manifest": "package.json",
+        "include": ["dependencies", "optionalDependencies"]
+      },
+      "mode": "ratchet",
+      "severity": "block",
+      "engines": [
+        "deterministic manifest parse (npm package.json; Go go.mod; pip requirements.txt) — no model, offline"
+      ],
+      "tune": "Set `manifest` to your manifest path; `include` to the dependency groups that count toward your surface (default runtime deps + optional; add `devDependencies` to also gate tooling growth). Ratchet so today's deps are grandfathered and only a NEW dependency blocks — bumping the baseline is the auditable record that you chose to add it. go.mod counts direct requires (skips `// indirect`); requirements.txt counts non-comment lines."
+    },
+    {
+      "tenet": "S2 — No hallucinated / unresolved dependencies (slopsquat guard)",
+      "status": "ready",
+      "id": "no-unlocked-deps",
+      "intent": "Every dependency DECLARED in package.json must RESOLVE in the lockfile. A declared-but-unlocked package is the deterministic, OFFLINE fingerprint of a hallucinated or typo'd ('slopsquatted') dependency — a name an AI invented that was never really installed — caught with no registry call and no model. This is the supply-chain failure that a behavioral test and the structural metrics are both blind to.",
+      "check": {
+        "kind": "unlocked_dependencies",
+        "manifest": "package.json",
+        "lockfile": "package-lock.json"
+      },
+      "max": 0,
+      "severity": "block",
+      "engines": [
+        "deterministic: npm package.json vs package-lock.json (lockfile v1 `dependencies` + v2/v3 `packages`) — offline, no model"
+      ],
+      "tune": "Use an absolute `max: 0` (not a ratchet — you never want even one phantom dep). peerDependencies are excluded by default (the consumer resolves them). A deliberately-unlocked dep (a `file:`/`workspace:`/`link:` local package) goes in `allow: [\"name\"]` — visible in the invariants file, not silent. npm only for now; go.sum / pnpm / yarn lockfiles are a follow-up."
     }
   ]
 }

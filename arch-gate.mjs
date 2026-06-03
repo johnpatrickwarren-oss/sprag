@@ -19,13 +19,12 @@
 // deliberately re-recording the baseline.
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, realpathSync } from 'node:fs';
-import { join, dirname, resolve as pathResolve } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
-import { isGeneratedFile, isSkippedDir, gitTrackedSet, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount } from './metrics.mjs';
+import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount, dependencyCount, unlockedDependencyCount } from './metrics.mjs';
+import { astgrepMetric, godFunctionCount, complexFunctionCount } from './ast-engine.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 // Default invariants: the repo ships a sample invariants.json (used by the tests); when absent
 // (e.g. a published install), fall back to language-agnostic generic checks so `arch check <dir>`
 // is sensible out of the box. (The real entry point is `arch init`, which scaffolds + baselines.)
@@ -101,80 +100,6 @@ function heuristicMetric(inv, src) {
   }
 }
 
-// ── ast-grep engine (real AST; TypeScript/JS via @ast-grep/napi) ────────────────
-let _sg = null, _goRegistered = false, _pyRegistered = false;
-function sgRoot(src, lang) {
-  if (!_sg) _sg = require('@ast-grep/napi');
-  if (lang === 'go') {
-    if (!_goRegistered) { _sg.registerDynamicLanguage({ go: require('@ast-grep/lang-go') }); _goRegistered = true; }
-    return _sg.parse('go', src).root();
-  }
-  if (lang === 'python' || lang === 'py') {
-    if (!_pyRegistered) { _sg.registerDynamicLanguage({ python: require('@ast-grep/lang-python') }); _pyRegistered = true; }
-    return _sg.parse('python', src).root();
-  }
-  return _sg.parse('Tsx', src).root();
-}
-function astgrepMetric(inv, src) {
-  const c = inv.check;
-  const root = sgRoot(src, inv.lang || 'ts');
-  const lines = src.split('\n');
-  const supRe = inv.id && new RegExp(`anchor:allow\\s+${inv.id}\\b`);
-  const notSuppressed = (n) => !(supRe && supRe.test(lines[n.range().start.line] || ''));
-
-  if (c.kind === 'magic_index_count') {
-    return root.findAll('$A[$N]')
-      .filter((n) => /^\d+$/.test(n.getMatch('N')?.text() ?? ''))
-      .filter(notSuppressed).length;
-  }
-  if (c.kind === 'forbid_pattern') {
-    // author-supplied structural rule: a `pattern`, optionally only when `inside` another node
-    // (by `inside` pattern or `inside_kind` node kind, e.g. go_statement for "inside a goroutine").
-    const rule = { pattern: c.pattern };
-    if (c.inside_kind) rule.inside = { kind: c.inside_kind, stopBy: 'end' };
-    else if (c.inside) rule.inside = { pattern: c.inside, stopBy: 'end' };
-    return root.findAll({ rule }).filter(notSuppressed).length;
-  }
-  if (c.kind === 'ast_grep_rule') {
-    // FULL extensibility: the invariant carries a raw ast-grep rule object (pattern / kind / inside /
-    // has / all / any / not / regex / ...). Counts matches (suppression-aware). Lets a project encode
-    // its OWN architectural rules in JSON with no code changes.
-    return root.findAll({ rule: c.rule }).filter(notSuppressed).length;
-  }
-  if (c.kind === 'max_function_lines') {
-    // generic God-function detector: count functions whose line span exceeds maxLines (lang-aware).
-    const lang = inv.lang || 'ts';
-    const kinds = lang === 'go' ? ['function_declaration', 'method_declaration', 'func_literal']
-      : (lang === 'python' || lang === 'py') ? ['function_definition']
-      : ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'];
-    let over = 0;
-    for (const k of kinds) {
-      for (const f of root.findAll({ rule: { kind: k } })) {
-        const r = f.range();
-        if ((r.end.line - r.start.line + 1) > c.maxLines && notSuppressed(f)) over++;
-      }
-    }
-    return over;
-  }
-  const isGo = (inv.lang || 'ts') === 'go';
-  if (c.kind === 'struct_field_count') {
-    if (isGo) {
-      const st = root.find(`type ${c.struct} struct { $$$ }`);
-      return st ? st.findAll({ rule: { kind: 'field_declaration' } }).length : 0;
-    }
-    const cls = root.find(`class ${c.struct} { $$$ }`) || root.find(`interface ${c.struct} { $$$ }`);
-    if (!cls) return 0;
-    return cls.findAll({ rule: { kind: 'public_field_definition' } }).length
-      + cls.findAll({ rule: { kind: 'property_signature' } }).length;
-  }
-  if (c.kind === 'switch_case_count') {
-    const sw = root.findAll({ rule: { kind: isGo ? 'expression_switch_statement' : 'switch_statement' } });
-    if (!sw.length) return 0;
-    return sw[0].findAll({ rule: { kind: isGo ? 'expression_case' : 'switch_case' } }).length;
-  }
-  throw new Error(`ast-grep: unknown check kind ${c.kind}`);
-}
-
 // scope_diff (T3) is engine-agnostic: it lexically extracts the capability names (dispatch
 // case-label string literals) and counts those NOT in the declared `allowed` scope. Unlike a count
 // ratchet, this catches a RENAME to an out-of-scope capability even when the count is unchanged.
@@ -194,106 +119,14 @@ function scopeOutOfBoundsCount(src, check, dir) {
   return n;
 }
 
-// God-function detector, recursive + PER FILE: readSource() concatenates only the top-level dir, so
-// on a nested tree (e.g. packages/cli/src/) the concatenated path counts 0. This walks the tree and
-// parses each file on its own (the correct unit — concatenating mixed files into one parse is fragile),
-// summing functions whose line span exceeds maxLines. Suppression-aware via `anchor:allow <id>`.
-const FN_JS_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
-const FN_EXTS = { go: ['.go'], python: ['.py'], py: ['.py'], ts: FN_JS_EXTS, js: FN_JS_EXTS };
-const FN_KINDS = {
-  go: ['function_declaration', 'method_declaration', 'func_literal'],
-  python: ['function_definition'], py: ['function_definition'],
-  ts: ['function_declaration', 'arrow_function', 'method_definition', 'function_expression', 'generator_function_declaration'],
-};
-function godFunctionCount(dir, maxLines, lang, invId) {
-  if (!dir || !existsSync(dir)) return 0;
-  const exts = FN_EXTS[lang] || FN_EXTS.ts;
-  const kinds = FN_KINDS[lang] || FN_KINDS.ts;
-  const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
-  const tracked = gitTrackedSet(dir);
-  let over = 0;
-  const walk = (d) => {
-    for (const n of readdirSync(d)) {
-      if (isSkippedDir(n)) continue;
-      const p = join(d, n);
-      if (statSync(p).isDirectory()) { walk(p); continue; }
-      if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;
-      if (tracked && !tracked.has(pathResolve(p))) continue;
-      const src = readFileSync(p, 'utf8');
-      let root;
-      try { root = sgRoot(src, lang); } catch { continue; } // parse error: skip this file
-      const lines = src.split('\n');
-      for (const k of kinds) {
-        for (const f of root.findAll({ rule: { kind: k } })) {
-          const r = f.range();
-          if ((r.end.line - r.start.line + 1) <= maxLines) continue;
-          if (supRe && supRe.test(lines[r.start.line] || '')) continue;
-          over++;
-        }
-      }
-    }
-  };
-  walk(dir);
-  return over;
-}
-
-// Cyclomatic-complexity decision nodes per language (control-flow branch points). A function's
-// complexity ≈ 1 + (decision nodes) + (short-circuit && / || / and / or) within it — a LESS-ARBITRARY
-// signal than raw line count: it flags BRANCHY functions (hard to follow + test; cyclomatic > ~10 is
-// the McCabe/NIST anchor), not merely long-but-flat ones. Reuses the same ast-grep parse as the
-// god-function check, so it is deterministic and adds no model cost. Conservative: a function's count
-// includes branches inside nested closures — fine for a ratcheted floor; suppress legit cases.
-const DECISION_KINDS = {
-  go: ['if_statement', 'for_statement', 'expression_case', 'type_case', 'communication_case'],
-  python: ['if_statement', 'elif_clause', 'for_statement', 'while_statement', 'except_clause', 'conditional_expression', 'case_clause'],
-  py: ['if_statement', 'elif_clause', 'for_statement', 'while_statement', 'except_clause', 'conditional_expression', 'case_clause'],
-  ts: ['if_statement', 'for_statement', 'for_in_statement', 'while_statement', 'do_statement', 'switch_case', 'catch_clause', 'ternary_expression'],
-};
-DECISION_KINDS.js = DECISION_KINDS.ts;
-const boolPatterns = (lang) => ((lang === 'python' || lang === 'py') ? ['$A and $B', '$A or $B'] : ['$A && $B', '$A || $B']);
-function complexFunctionCount(dir, maxComplexity, lang, invId) {
-  if (!dir || !existsSync(dir)) return 0;
-  const exts = FN_EXTS[lang] || FN_EXTS.ts;
-  const fnKinds = FN_KINDS[lang] || FN_KINDS.ts;
-  const decisionKinds = DECISION_KINDS[lang] || DECISION_KINDS.ts;
-  const bools = boolPatterns(lang);
-  const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
-  const tracked = gitTrackedSet(dir);
-  let over = 0;
-  const walk = (d) => {
-    for (const n of readdirSync(d)) {
-      if (isSkippedDir(n)) continue;
-      const p = join(d, n);
-      if (statSync(p).isDirectory()) { walk(p); continue; }
-      if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;
-      if (tracked && !tracked.has(pathResolve(p))) continue;
-      const src = readFileSync(p, 'utf8');
-      let root;
-      try { root = sgRoot(src, lang); } catch { continue; } // parse error: skip this file
-      const lines = src.split('\n');
-      for (const fk of fnKinds) {
-        for (const fn of root.findAll({ rule: { kind: fk } })) {
-          let cx = 1;
-          for (const dk of decisionKinds) cx += fn.findAll({ rule: { kind: dk } }).length;
-          for (const bp of bools) cx += fn.findAll({ rule: { pattern: bp } }).length;
-          if (cx <= maxComplexity) continue;
-          const sl = fn.range().start.line; // suppression on the function line OR the line directly above
-          if (supRe && (supRe.test(lines[sl] || '') || supRe.test(lines[sl - 1] || ''))) continue;
-          over++;
-        }
-      }
-    }
-  };
-  walk(dir);
-  return over;
-}
-
 export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'module_fanin') return moduleFaninCount(dir, inv.check.maxFanin);
   if (inv.check.kind === 'oversized_files') return oversizedFilesCount(dir, inv.check.maxLines);
   if (inv.check.kind === 'forbid_path') return forbidPathRefCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'time_bomb_tests') return timeBombTestCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'require_tests') return untestedModuleCount(dir, inv.check, inv.id);
+  if (inv.check.kind === 'dependency_count') return dependencyCount(dir, inv.check);
+  if (inv.check.kind === 'unlocked_dependencies') return unlockedDependencyCount(dir, inv.check);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check, dir);
   // God-function check: prefer the recursive per-file walk when we have a dir (correct on nested
   // trees); fall back to the concatenated single-parse when only `src` is available.
@@ -360,7 +193,12 @@ function main() {
   const srcByLang = {};
   const getSrc = (lang) => (srcByLang[lang] ??= readSource(dir, lang));
   const metrics = {};
-  for (const inv of invariants) metrics[inv.id] = metricValue(inv, getSrc(inv.lang || 'go'), dir);
+  try {
+    for (const inv of invariants) metrics[inv.id] = metricValue(inv, getSrc(inv.lang || 'go'), dir);
+  } catch (e) {
+    if (e && e.code === 'ENGINE_UNAVAILABLE') { console.error(`arch-gate: ${e.message}`); process.exit(2); }
+    throw e;
+  }
 
   if (writeBaseline) {
     writeFileSync(baselineOut || BASELINE_PATH, JSON.stringify(metrics, null, 2) + '\n');
