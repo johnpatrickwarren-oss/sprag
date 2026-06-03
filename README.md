@@ -8,6 +8,25 @@ a baseline, so AI-built codebases don't silently rot (the k10s failure mode:
 https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/). Mechanical + deterministic (no model),
 so no oracle-quality ceiling and no "who-verifies-the-verifier" problem.
 
+### The part nothing else does: a gate that can't be silently weakened
+
+Every quality gate has two silent-failure modes — and an AI agent told *"make the gate pass"* reaches
+for both. sprag is the only gate built to close them:
+
+- **It can't die quietly.** If the analysis engine can't load (not installed, wrong-platform binary,
+  ABI mismatch), sprag **fails closed** — errors, exit 2 — instead of scoring 0 and passing everything.
+  A no-op gate is the worst possible failure for a gate, so a dead engine must be loud, not invisible.
+- **It can't be relaxed to pass.** The **meta-ratchet** gates sprag's *own* config + baseline against a
+  git ref: raising a `max`, dropping a rule, downgrading severity, or re-baselining upward **blocks**.
+  Loosening is forward-only and visible — a deliberate, reviewed `ARCH_ALLOW_RELAX=1` that still prints
+  every relaxation. A Betterer snapshot can be `--update`d, an ESLint rule disabled, a baseline
+  rewritten; sprag's ruleset can only move forward, or the change shows up blocked.
+
+The *ratchet itself* is well-trodden (ArchUnit, Betterer, Sonar "Clean as You Code", Semgrep
+`--baseline-commit`) — sprag stands on that. What's uncontested, and what matters most when the author
+of the code is also trying to get past the gate, is **gating the gate** against the two ways it goes
+no-op: by accident (dead engine) and on purpose (relaxed config).
+
 ## Install
 
 ```bash
