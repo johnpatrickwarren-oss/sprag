@@ -33,6 +33,7 @@
     "arch-loop.mjs",
     "scan.mjs",
     "mutate.mjs",
+    "property.mjs",
     "install-hook.sh",
     "demo-threat-model.mjs",
     "library/",

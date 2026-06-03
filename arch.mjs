@@ -8,6 +8,7 @@
 //   arch install-hook <repo> <src> [invariants]                     install the pre-commit gate
 //   arch scan   <dir> [--name N]                                  survey God code (oversized files / functions / hubs)
 //   arch mutate <dir> --test "<cmd>" [--since ref] [--all]         OPT-IN incremental mutation testing (test efficacy; out-of-band)
+//   arch property <dir> --prop "<cmd>" [--target d] [--min-kill N]  accept a property iff it HOLDS + CATCHES BUGS (the behavioral rung)
 //   arch init   <dir> [--lang go|ts|js] [--out f]                   scaffold generic invariants + baseline
 import { spawnSync } from 'node:child_process';
 import { readdirSync, writeFileSync, readFileSync, statSync, existsSync, realpathSync } from 'node:fs';
@@ -67,9 +68,10 @@ function cli() {
     case 'install-hook': run('bash', [join(HERE, 'install-hook.sh'), ...rest]); break;
     case 'scan': run('node', [join(HERE, 'scan.mjs'), ...rest]); break;
     case 'mutate': run('node', [join(HERE, 'mutate.mjs'), ...rest]); break;
+    case 'property': run('node', [join(HERE, 'property.mjs'), ...rest]); break;
     case 'init': init(rest); break;
     default:
-      console.error('usage: arch <check|baseline|trend|loop|install-hook|scan|mutate|init> ...  (see header of arch.mjs)');
+      console.error('usage: arch <check|baseline|trend|loop|install-hook|scan|mutate|property|init> ...  (see header of arch.mjs)');
       process.exit(64);
   }
 }
