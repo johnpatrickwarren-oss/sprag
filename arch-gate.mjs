@@ -23,6 +23,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount, dependencyCount, unlockedDependencyCount } from './metrics.mjs';
 import { astgrepMetric, godFunctionCount, complexFunctionCount } from './ast-engine.mjs';
+import { configRelaxationCount } from './meta-ratchet.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Default invariants: the repo ships a sample invariants.json (used by the tests); when absent
@@ -127,6 +128,7 @@ export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'require_tests') return untestedModuleCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'dependency_count') return dependencyCount(dir, inv.check);
   if (inv.check.kind === 'unlocked_dependencies') return unlockedDependencyCount(dir, inv.check);
+  if (inv.check.kind === 'config_relaxations') return configRelaxationCount(dir, inv.check);
   if (inv.check.kind === 'scope_diff') return scopeOutOfBoundsCount(src, inv.check, dir);
   // God-function check: prefer the recursive per-file walk when we have a dir (correct on nested
   // trees); fall back to the concatenated single-parse when only `src` is available.

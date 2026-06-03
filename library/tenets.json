@@ -189,6 +189,24 @@
         "deterministic: npm package.json vs package-lock.json (lockfile v1 `dependencies` + v2/v3 `packages`) — offline, no model"
       ],
       "tune": "Use an absolute `max: 0` (not a ratchet — you never want even one phantom dep). peerDependencies are excluded by default (the consumer resolves them). A deliberately-unlocked dep (a `file:`/`workspace:`/`link:` local package) goes in `allow: [\"name\"]` — visible in the invariants file, not silent. npm only for now; go.sum / pnpm / yarn lockfiles are a follow-up."
+    },
+    {
+      "tenet": "M1 — Meta-ratchet: the gate guards itself (no silent relaxation)",
+      "status": "ready",
+      "id": "no-config-relaxation",
+      "intent": "The invariants config + baseline may only move FORWARD (stricter), never backward. Closes the reverse gear in the one-way clutch: an AI-loop fixer (or a hurried human) can make a violation vanish not by fixing the code but by raising a `max`, dropping a rule, downgrading severity, or re-recording baseline.json upward to grandfather more debt — and the relaxed config then passes, silently. This rule counts those relaxations vs a git ref. Because it lives in the invariant set it guards, deleting it is itself a counted relaxation.",
+      "check": {
+        "kind": "config_relaxations",
+        "invariants": "invariants.json",
+        "baseline": "baseline.json",
+        "against": "HEAD"
+      },
+      "max": 0,
+      "severity": "block",
+      "engines": [
+        "deterministic git diff of config vs ref (raised/removed max, removed rule, severity downgrade, raised baseline) — no model, no ast-grep"
+      ],
+      "tune": "Point `invariants`/`baseline` at your config paths (relative to the checked dir) and `against` at the ref to compare to (HEAD for a pre-commit hook comparing the working/staged config to the last commit). Use `max: 0`. A deliberate, REVIEWED loosening (you really do want to raise a threshold) is run with `ARCH_ALLOW_RELAX=1` — the relaxations are still printed to stderr, so the escape hatch is visible, never silent. Pair with fail-closed: together they stop the gate becoming a no-op either by accident (dead engine) or on purpose (relaxed config)."
     }
   ]
 }
