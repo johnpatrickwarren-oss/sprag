@@ -69,21 +69,39 @@ if (has('--all')) {
 }
 if (!targets.length) { console.log('mutate: no changed source files (use --all, or --since <ref>). nothing to mutate.'); process.exit(0); }
 
-// Mask strings + comments (same length, newlines preserved) so we never mutate operators inside them.
+// Mask strings + comments + REGEX LITERALS (same length, newlines preserved) so we never mutate
+// operators inside them — and, crucially, so a quote inside a regex (e.g. /["']/) can't be mistaken
+// for a string delimiter and mask out the real code that follows. Regex-vs-division is disambiguated by
+// the preceding significant token: a `/` is a regex when it follows nothing, an operator/open-bracket,
+// or a regex-preceding keyword (return, typeof, case, …); it's division after an identifier/number/`)`.
+const RE_KW = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await', 'case', 'throw']);
+const isWordCh = (ch) => (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_' || ch === '$';
 function mask(src) {
-  let out = '', i = 0, st = null;
+  let out = '', i = 0, st = null, reClass = false, prevSig = '', word = '';
+  const regexOK = () => (word ? RE_KW.has(word) : (prevSig === '' || '([{,;:=+-*/%&|^!~<>?'.includes(prevSig)));
   while (i < src.length) {
     const c = src[i], n = src[i + 1];
     if (!st) {
       if (c === '/' && n === '/') { st = '//'; out += '  '; i += 2; continue; }
       if (c === '/' && n === '*') { st = '/*'; out += '  '; i += 2; continue; }
-      if (c === "'" || c === '"' || c === '`') { st = c; out += c; i++; continue; }
-      out += c; i++; continue;
+      if (c === '/' && regexOK()) { st = 're'; reClass = false; out += '/'; word = ''; prevSig = '/'; i++; continue; }
+      if (c === "'" || c === '"' || c === '`') { st = c; out += c; word = ''; prevSig = c; i++; continue; }
+      out += c;
+      if (isWordCh(c)) word += c;
+      else if (c !== ' ' && c !== '\t' && c !== '\n' && c !== '\r') { word = ''; prevSig = c; }
+      i++; continue;
     }
     if (st === '//') { if (c === '\n') { st = null; out += c; } else out += ' '; i++; continue; }
     if (st === '/*') { if (c === '*' && n === '/') { st = null; out += '  '; i += 2; } else { out += (c === '\n' ? '\n' : ' '); i++; } continue; }
+    if (st === 're') { // inside a regex literal — mask content; `[`…`]` char classes may hold an unescaped `/`
+      if (c === '\\') { out += '  '; i += 2; continue; }
+      if (c === '[') { reClass = true; out += ' '; i++; continue; }
+      if (c === ']') { reClass = false; out += ' '; i++; continue; }
+      if (c === '/' && !reClass) { st = null; out += '/'; prevSig = '/'; i++; continue; }
+      out += (c === '\n' ? '\n' : ' '); i++; continue;
+    }
     if (c === '\\') { out += '  '; i += 2; continue; }
-    if (c === st) { st = null; out += c; i++; continue; }
+    if (c === st) { st = null; out += c; word = ''; prevSig = st; i++; continue; }
     out += (c === '\n' ? '\n' : ' '); i++;
   }
   return out;
