@@ -47,5 +47,9 @@ const run = (cmd) => { const r = spawnSync('node', [PROP, d, '--prop', cmd, '--t
   expect('--strict-restatement turns restatement into REJECT', s.code === 3 && /restates the impl/i.test(s.out), `exit ${s.code}: ${s.out}`);
 }
 
+// (mutation-hardening) the usage guard: missing --prop is a usage error (exit 64), not a silent run
+{ const r = spawnSync('node', [PROP, '/tmp'], { encoding: 'utf8' });
+  expect('missing --prop -> usage error (exit 64)', r.status === 64, `exit ${r.status}`); }
+
 console.log(failed === 0 ? '\nPASS: arch property accepts strong invariants, rejects weak/tautological + non-holding, warns on restatement ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);

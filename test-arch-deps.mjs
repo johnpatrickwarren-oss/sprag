@@ -53,6 +53,12 @@ const run = (dir, inv, extra = []) => { const r = spawnSync('node', [GATE, dir, 
   const inv2 = writeInv([{ id: 'no-ghost-deps', intent: 'x', check: { kind: 'unlocked_dependencies', allow: ['ghost-pkg'] }, max: 0, severity: 'block' }]);
   r = run(d1, inv2);
   expect('allow-listed unlocked dep PASSES', r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`);
+  // a CORRUPT lockfile must NOT false-flag every dep as phantom — abstain (count 0), warn instead
+  const d3 = tmp('arch-dep-');
+  writePkg(d3, { 'real-pkg': '^1', 'other-pkg': '^1' });
+  writeFileSync(join(d3, 'package-lock.json'), '{ "packages": { "node_modules/real-pkg":'); // truncated/unparseable
+  r = run(d3, inv);
+  expect('corrupt lockfile abstains (no false phantom-dep block)', r.code === 0 && /unparseable/.test(r.out), `exit ${r.code}: ${r.out}`);
 }
 
 console.log(failed === 0 ? '\nPASS: dependency surface ratchets; hallucinated (unlocked) deps blocked ✅' : `\nFAIL: ${failed}`);

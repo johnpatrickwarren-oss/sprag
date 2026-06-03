@@ -305,7 +305,7 @@ export function dependencyCount(dir, check) {
 function lockedNpmNames(lockPath) {
   const lock = readJSON(lockPath);
   const names = new Set();
-  if (!lock) return names;
+  if (!lock) return null; // unparseable lockfile — signal "can't verify" (vs a valid-but-empty lock)
   if (lock.packages) {
     for (const key of Object.keys(lock.packages)) {
       const i = key.lastIndexOf('node_modules/');
@@ -332,6 +332,9 @@ export function unlockedDependencyCount(dir, check) {
   if (!existsSync(manifest) || !existsSync(lockPath)) return 0;
   const allow = new Set(check.allow || []);
   const locked = lockedNpmNames(lockPath);
+  // A corrupt/unparseable lockfile is NOT "every dep is phantom" — abstain loudly rather than
+  // false-flag all declared deps (the broken lockfile is its own problem; npm ci will catch it).
+  if (locked === null) { console.error(`arch-gate: lockfile ${check.lockfile || 'package-lock.json'} is unparseable — cannot verify dependencies; skipping unlocked-deps check`); return 0; }
   let n = 0;
   for (const name of declaredDeps(manifest, check.include || ['dependencies', 'devDependencies', 'optionalDependencies'])) {
     if (!locked.has(name) && !allow.has(name)) n++;

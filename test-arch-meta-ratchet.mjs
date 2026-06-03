@@ -82,5 +82,42 @@ const relax = (dir, invariants, baseline) => { writeFileSync(join(dir, 'guarded.
   expect('stage-then-revert: worktree mode PASSES (clean tree)', work.code === 0 && /PASS/.test(work.out), `exit ${work.code}: ${work.out}`);
   expect('stage-then-revert: index mode BLOCKS the staged relaxation', idx.code === 3 && /maxLines 400 -> 800/.test(idx.out), `exit ${idx.code}: ${idx.out}`); }
 
-console.log(failed === 0 ? '\nPASS: meta-ratchet blocks config/baseline relaxation (incl. exemption-growth, floor-removal, staged); forward changes & override pass ✅' : `\nFAIL: ${failed}`);
+// ── mutation-hardening: cases that close the gaps `arch mutate` found in meta-ratchet.mjs ──────────
+// dropped enforcement — an invariant that had max+ratchet now has neither (no longer enforces anything)
+{ const d = repo(BASE_INV, { r1: 5 }); relax(d, [{ id: 'r1', intent: 'x', check: BASE_INV[0].check }]); // strip max + mode
+  const r = run(d); expect('dropped enforcement (max+ratchet removed) BLOCKED', r.code === 3 && /no longer enforces/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// dropped enforcement on a RATCHET-ONLY invariant (no max) — isolates enforces() (kills the || mutant
+// that the max-bearing case masks via max-removed)
+{ const ratchetOnly = [{ id: 'r1', intent: 'x', check: BASE_INV[0].check, mode: 'ratchet', severity: 'block' }];
+  const d = repo(ratchetOnly, { r1: 5 }); relax(d, [{ id: 'r1', intent: 'x', check: BASE_INV[0].check, severity: 'block' }]); // drop mode
+  const r = run(d); expect('dropped enforcement on a ratchet-only invariant BLOCKED', r.code === 3 && /no longer enforces/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// raised TOP-LEVEL max (not just a check threshold)
+{ const d = repo(BASE_INV, { r1: 5 }); relax(d, [{ ...BASE_INV[0], max: 20 }]);
+  const r = run(d); expect('raised top-level max (10 -> 20) BLOCKED', r.code === 3 && /max 10 -> 20/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// a non-`max` numeric field changing must NOT be read as a relaxation (maxFields filters to max* numerics)
+{ const d = repo([{ ...BASE_INV[0], check: { kind: 'oversized_files', maxLines: 400, weight: 5 } }], { r1: 5 });
+  relax(d, [{ ...BASE_INV[0], check: { kind: 'oversized_files', maxLines: 400, weight: 9 } }]);
+  const r = run(d); expect('non-max numeric field change PASSES (maxFields filter)', r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// removing a baseline floor for a NON-ratchet invariant must NOT flag (only still-active ratchets do)
+{ const inv = [{ id: 'r2', intent: 'x', check: { kind: 'unlocked_dependencies' }, max: 0, severity: 'block' }]; // absolute, not ratchet
+  const d = repo(inv, { r2: 3 }); relax(d, inv, {}); // r2 stays, its baseline entry goes
+  const r = run(d); expect('baseline removal for a NON-ratchet invariant PASSES', r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// missing baseline file at the ref (null oldBase) must be handled, not crash
+{ const d = mkdtempSync(join(tmpdir(), 'arch-mr-')); git(d, 'init', '-q');
+  writeFileSync(join(d, 'guarded.json'), JSON.stringify(BASE_INV, null, 2)); // no guarded-baseline.json
+  git(d, 'add', '-A'); git(d, 'commit', '-q', '-m', 'init');
+  const r = run(d); expect('missing baseline file PASSES, no crash (null oldBase)', r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// `against` defaults to HEAD when omitted — still catches a relaxation
+{ const metaNoAgainst = writeInv([{ id: 'no-config-relaxation', intent: 'x', check: { kind: 'config_relaxations', invariants: 'guarded.json', baseline: 'guarded-baseline.json' }, max: 0, severity: 'block' }]);
+  const d = repo(BASE_INV, { r1: 5 }); relax(d, [{ ...BASE_INV[0], check: { kind: 'oversized_files', maxLines: 800 } }]);
+  const r = spawnSync('node', [GATE, d, '--invariants', metaNoAgainst], { encoding: 'utf8' });
+  expect('against defaults to HEAD (omitted) still BLOCKS', r.status === 3 && /maxLines 400 -> 800/.test((r.stdout || '') + (r.stderr || '')), `exit ${r.status}`); }
+
+console.log(failed === 0 ? '\nPASS: meta-ratchet blocks config/baseline relaxation (incl. exemption-growth, floor-removal, staged, dropped-enforcement, top-level-max); forward changes & override pass ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
