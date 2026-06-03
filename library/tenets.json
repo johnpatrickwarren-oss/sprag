@@ -293,6 +293,22 @@
         "deterministic, no model: runs each `cmd` and diffs stdout (optionally +stderr) against its committed golden file"
       ],
       "tune": "EXECUTES the code, so unlike the static checks it is OPT-IN / OUT-OF-BAND (CI / pre-merge, where `arch mutate` lives) — NOT the per-commit hot path, and the commands must be DETERMINISTIC (a flaky command makes a flaky gate). Each case: `{ name?, cmd, golden, timeout?, includeStderr?, expectExit? }`. Record/refresh goldens with `ARCH_RECORD_GOLDEN=1` (writes current outputs); the committed golden diff IS the auditable approval — pair with a meta-ratchet over the golden dir so a golden can't be silently rewritten to bless drift. Best for: a CLI's output, a pure transform/serializer, a formatter — anything with a stable, meaningful output."
+    },
+    {
+      "tenet": "PT1 — Durable project trail exists (the deterministic floor under Anchor's Discipline 6)",
+      "status": "ready",
+      "id": "require-project-trail",
+      "intent": "A project's durable trail — the human-readable record of what was decided and why (a PROJECT-TRAIL.md, an ADR/decisions dir) — must be PRESENT. This is the deterministic shadow of Anchor's 'durable project trail' discipline: the gate can't prove the trail is well-maintained (that's the behavioral discipline, in Anchor), but it enforces the durable outcome — the artifact is THERE, not silently dropped. Same shape as require-tests is to TDD.",
+      "check": {
+        "kind": "require_paths",
+        "paths": ["PROJECT-TRAIL.md"]
+      },
+      "max": 0,
+      "severity": "block",
+      "engines": [
+        "deterministic file/dir existence — no model"
+      ],
+      "tune": "Set `paths` to the artifacts your project trail actually uses (a single `PROJECT-TRAIL.md`, or `docs/adr` + `DECISIONS.md`, etc.) — each is required to EXIST (file or dir). Use `max: 0`. Pairs with Anchor's Discipline 6 and its project-trail template (Anchor owns the discipline + template; this is sprag's existence floor). Existence only — for 'the trail was actually updated' you'd add a per-PR freshness check, deliberately out of scope here."
     }
   ]
 }

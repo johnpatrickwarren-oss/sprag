@@ -245,6 +245,18 @@ export function untestedModuleCount(dir, check, invId) {
   return n;
 }
 
+// require_paths: a required artifact must EXIST — the deterministic floor under a discipline whose
+// durable outcome is "an artifact is present" (e.g. Anchor's "durable project trail": PROJECT-TRAIL.md /
+// an ADR or decisions/ dir). Like require_tests is the deterministic shadow of TDD, this can't prove the
+// artifact is GOOD, only that it's THERE. Counts missing paths (file or dir); use `max: 0`. check:
+// { paths: ['PROJECT-TRAIL.md', 'docs/adr'] }.
+export function missingPathCount(dir, check) {
+  if (!dir) return 0;
+  let n = 0;
+  for (const rel of check.paths || []) if (!existsSync(join(dir, rel))) n++;
+  return n;
+}
+
 // ── supply chain: dependency surface + hallucinated ("unlocked") deps ────────────
 // Two AI-codegen dependency failure modes the size/coupling/test metrics never see:
 //   (1) silent SURFACE GROWTH — every added third-party package enlarges the attack +
