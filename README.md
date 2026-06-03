@@ -205,12 +205,16 @@ suppression-aware:
   - **Fail *closed*.** If the ast-grep engine can't load (not installed, wrong-platform binary, ABI
     mismatch) the gate **errors (exit 2)** instead of silently scoring 0 and passing everything — a
     no-op gate is the worst possible failure for a gate.
-  - **No silent relaxation** (`config_relaxations` `{ invariants, baseline, against }`, the
-    *meta-ratchet*). The config + baseline may only move **forward** (stricter) vs a git ref: a raised
-    `max`, dropped rule, downgraded severity, or raised baseline **blocks**. Because the rule lives in
-    the set it guards, deleting it counts too. A deliberate, reviewed loosening goes through
-    `ARCH_ALLOW_RELAX=1` — still printed, never silent. Together these stop the gate becoming a no-op
-    either by accident (dead engine) or on purpose (relaxed config).
+  - **No silent relaxation** (`config_relaxations` `{ invariants, baseline, against, from }`, the
+    *meta-ratchet*). The config + baseline may only move **forward** (stricter) vs a git ref. It blocks
+    every way an agent can make a violation vanish without fixing the code: a raised `max`, dropped
+    rule, downgraded severity, raised baseline, a **removed baseline floor** for a still-active rule,
+    or a **grown exemption list** (adding the hallucinated dep to `allow`, the new dir to `allowed`,
+    the untested module to `exclude`). Because the rule lives in the set it guards, deleting it counts
+    too. In a pre-commit hook, `from: "index"` checks what's actually being **committed** (the staged
+    config) — closing the stage-a-relaxation-then-revert-the-working-file trick. A deliberate, reviewed
+    loosening goes through `ARCH_ALLOW_RELAX=1` — still printed, never silent. Together with fail-closed
+    these stop the gate becoming a no-op either by accident (dead engine) or on purpose (relaxed config).
 
 sprag enforces all of the above **on itself** (`invariants.harness.json`, run over the whole repo by
 the dogfood test on every `npm test`).

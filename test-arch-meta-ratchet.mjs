@@ -59,5 +59,28 @@ const relax = (dir, invariants, baseline) => { writeFileSync(join(dir, 'guarded.
   const r = run(d, { ARCH_ALLOW_RELAX: '1' });
   expect('ARCH_ALLOW_RELAX permits but PRINTS', r.code === 0 && /PASS/.test(r.out) && /maxLines 400 -> 800/.test(r.out), `exit ${r.code}: ${r.out}`); }
 
-console.log(failed === 0 ? '\nPASS: meta-ratchet blocks config/baseline relaxation; forward changes & explicit override pass ✅' : `\nFAIL: ${failed}`);
+// (b) HARDENING — growing an exemption list (the allow-list an agent reaches for) -> block
+{ const inv0 = [{ id: 'r1', intent: 'x', check: { kind: 'unlocked_dependencies', allow: ['pkg-a'] }, max: 0, severity: 'block' }];
+  const d = repo(inv0, {}); relax(d, [{ ...inv0[0], check: { kind: 'unlocked_dependencies', allow: ['pkg-a', 'pkg-b'] } }]);
+  const r = run(d); expect('grown allow-list (exempts more) BLOCKED', r.code === 3 && /check\.allow exempts more: \+pkg-b/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// (b) HARDENING — removing a baseline floor for a STILL-ACTIVE ratchet rule -> block
+{ const d = repo(BASE_INV, { r1: 5 }); relax(d, BASE_INV, {}); // r1 still present, its baseline entry gone
+  const r = run(d); expect('removed baseline floor (still-active rule) BLOCKED', r.code === 3 && /baseline\[r1\] removed/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
+// (b) HARDENING — stage-then-revert: `git add` a relaxed config, revert the WORKING file. worktree
+// mode sees a clean tree (misses it); `from: 'index'` checks what's actually committed and catches it.
+{ const d = repo(BASE_INV, { r1: 5 });
+  const orig = JSON.stringify(BASE_INV, null, 2);
+  writeFileSync(join(d, 'guarded.json'), JSON.stringify([{ ...BASE_INV[0], check: { kind: 'oversized_files', maxLines: 800 } }], null, 2));
+  git(d, 'add', 'guarded.json');                 // stage the relaxation
+  writeFileSync(join(d, 'guarded.json'), orig);  // revert the WORKING file: worktree==HEAD, index==relaxed
+  const work = run(d);                            // default worktree mode -> sees nothing
+  const idxInv = writeInv([{ id: 'no-config-relaxation', intent: 'staged', check: { kind: 'config_relaxations', invariants: 'guarded.json', baseline: 'guarded-baseline.json', against: 'HEAD', from: 'index' }, max: 0, severity: 'block' }]);
+  const ir = spawnSync('node', [GATE, d, '--invariants', idxInv], { encoding: 'utf8' });
+  const idx = { code: ir.status, out: (ir.stdout || '') + (ir.stderr || '') };
+  expect('stage-then-revert: worktree mode PASSES (clean tree)', work.code === 0 && /PASS/.test(work.out), `exit ${work.code}: ${work.out}`);
+  expect('stage-then-revert: index mode BLOCKS the staged relaxation', idx.code === 3 && /maxLines 400 -> 800/.test(idx.out), `exit ${idx.code}: ${idx.out}`); }
+
+console.log(failed === 0 ? '\nPASS: meta-ratchet blocks config/baseline relaxation (incl. exemption-growth, floor-removal, staged); forward changes & override pass ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);

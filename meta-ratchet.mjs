@@ -31,6 +31,11 @@ function maxFields(check) {
   return out;
 }
 const enforces = (inv) => typeof inv.max === 'number' || inv.mode === 'ratchet';
+// Exemption arrays inside a check: growing any of them lets MORE through (the allow-list an AI agent
+// reaches for — add the hallucinated dep to `allow`, the new feature dir to `allowed/allowedDirs`, the
+// untested module to `exclude`). `allowed`/`allowedDirs` are scope_diff's in-scope set, so adding to
+// them widens scope; `allow`/`exclude` are exemption lists. Any ADDED entry is a relaxation.
+const EXEMPTION_KEYS = ['allow', 'exclude', 'allowed', 'allowedDirs'];
 
 // Every way `inv` (new) is weaker than `old` (same id), as human-readable reasons.
 function invariantRelaxations(id, old, inv) {
@@ -47,17 +52,33 @@ function invariantRelaxations(id, old, inv) {
     out.push(`[${id}] severity block -> ${inv.severity} (downgraded)`);
   }
   if (enforces(old) && !enforces(inv)) out.push(`[${id}] no longer enforces (max/ratchet removed)`);
+  for (const k of EXEMPTION_KEYS) {
+    const newArr = Array.isArray(inv.check?.[k]) ? inv.check[k] : [];
+    if (!newArr.length) continue; // removing/emptying an exemption list is STRICTER, never flagged
+    const oldSet = new Set(Array.isArray(old.check?.[k]) ? old.check[k] : []);
+    const added = newArr.filter((x) => !oldSet.has(x));
+    if (added.length) out.push(`[${id}] check.${k} exempts more: +${added.join(', ')}`);
+  }
   return out;
+}
+
+// The "current" version of a config file: the working tree by default, or the STAGED (index) version
+// when `from: 'index'` — so a pre-commit hook checks what's actually being COMMITTED, closing the
+// stage-a-relaxation-then-revert-the-working-file trick (`git show :./name` reads the index).
+function currentConfig(dir, name, from) {
+  if (from === 'index') return fileAtRef(dir, '', name);
+  return existsSync(join(dir, name)) ? readFileSync(join(dir, name), 'utf8') : null;
 }
 
 // All relaxations of the current invariants + baseline vs `ref`. Returns { count, reasons[] }.
 export function configRelaxations(dir, check) {
   const ref = check.against || 'HEAD';
+  const from = check.from || 'worktree';
   const invName = check.invariants || 'invariants.json';
   const baseName = check.baseline || 'baseline.json';
   const reasons = [];
 
-  const curInv = parseJSON(existsSync(join(dir, invName)) ? readFileSync(join(dir, invName), 'utf8') : null) || [];
+  const curInv = parseJSON(currentConfig(dir, invName, from)) || [];
   const oldInv = parseJSON(fileAtRef(dir, ref, invName));
   if (Array.isArray(oldInv)) {
     const newById = new Map(curInv.map((i) => [i.id, i]));
@@ -68,13 +89,17 @@ export function configRelaxations(dir, check) {
     }
   }
 
-  const curBase = parseJSON(existsSync(join(dir, baseName)) ? readFileSync(join(dir, baseName), 'utf8') : null) || {};
+  // Ratchet ids still present in the current config — a baseline entry vanishing for one of these drops
+  // its floor silently (a removed entry for an already-removed invariant is benign, flagged above).
+  const ratchetIds = new Set(curInv.filter((i) => i && i.mode === 'ratchet').map((i) => i.id));
+  const curBase = parseJSON(currentConfig(dir, baseName, from)) || {};
   const oldBase = parseJSON(fileAtRef(dir, ref, baseName));
   if (oldBase && typeof oldBase === 'object') {
     for (const [id, ov] of Object.entries(oldBase)) {
       if (typeof ov !== 'number') continue;
       const nv = curBase[id];
-      if (typeof nv === 'number' && nv > ov) reasons.push(`baseline[${id}] ${ov} -> ${nv} (raised — grandfathers more debt)`);
+      if (typeof nv === 'number') { if (nv > ov) reasons.push(`baseline[${id}] ${ov} -> ${nv} (raised — grandfathers more debt)`); }
+      else if (ratchetIds.has(id)) reasons.push(`baseline[${id}] removed (ratchet floor dropped for a still-active rule)`);
     }
   }
   return { count: reasons.length, reasons };

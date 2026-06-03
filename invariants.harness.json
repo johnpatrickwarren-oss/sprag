@@ -43,8 +43,14 @@
   },
   {
     "id": "no-config-relaxation",
-    "intent": "The gate guards itself (M1): this config + baseline may only move forward (stricter) vs HEAD. ARCH_ALLOW_RELAX=1 for a deliberate, reviewed loosening.",
+    "intent": "The gate guards itself (M1): this config + baseline may only move forward (stricter) vs HEAD — worktree view, for CI / `npm test` where the working tree is what's under review. ARCH_ALLOW_RELAX=1 for a deliberate, reviewed loosening.",
     "check": { "kind": "config_relaxations", "invariants": "invariants.harness.json", "baseline": "baseline-harness.json", "against": "HEAD" },
+    "max": 0, "severity": "block"
+  },
+  {
+    "id": "no-config-relaxation-staged",
+    "intent": "M1, staged view: in the pre-commit hook, check what is actually being COMMITTED (the index), closing the stage-a-relaxation-then-revert-the-working-file trick. Trivial (0) when nothing is staged.",
+    "check": { "kind": "config_relaxations", "invariants": "invariants.harness.json", "baseline": "baseline-harness.json", "against": "HEAD", "from": "index" },
     "max": 0, "severity": "block"
   }
 ]
