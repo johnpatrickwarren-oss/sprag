@@ -10,5 +10,41 @@
     "intent": "No function over 60 lines (God function) — decompose it.",
     "check": { "kind": "max_function_lines", "maxLines": 60 },
     "mode": "ratchet", "severity": "block", "lang": "js", "engine": "ast-grep"
+  },
+  {
+    "id": "dep-surface",
+    "intent": "The dependency surface must not grow silently (S1) — each new dep is a deliberate re-baseline.",
+    "check": { "kind": "dependency_count" },
+    "mode": "ratchet", "severity": "block"
+  },
+  {
+    "id": "no-unlocked-deps",
+    "intent": "Every declared dep must resolve in the lockfile (S2) — no hallucinated / slopsquatted package.",
+    "check": { "kind": "unlocked_dependencies" },
+    "max": 0, "severity": "block"
+  },
+  {
+    "id": "no-committed-secrets",
+    "intent": "No credential inlined into source (SEC1).",
+    "check": { "kind": "secret_scan", "dirs": ["."] },
+    "max": 0, "severity": "block"
+  },
+  {
+    "id": "no-new-any",
+    "intent": "No `any` type — don't switch off the type system (TS1). This codebase is JS; the gate keeps it at 0 so a future .ts addition can't sneak one in.",
+    "check": { "kind": "ast_grep_tree", "lang": "ts", "rule": { "kind": "predefined_type", "regex": "^any$" } },
+    "max": 0, "severity": "block"
+  },
+  {
+    "id": "no-ts-ignore",
+    "intent": "No @ts-ignore / @ts-nocheck directive — don't disable the checker (TS3); prefer @ts-expect-error.",
+    "check": { "kind": "ast_grep_tree", "lang": "ts", "rule": { "kind": "comment", "regex": "^/[/*]\\s*@ts-(ignore|nocheck)\\b" } },
+    "max": 0, "severity": "block"
+  },
+  {
+    "id": "no-config-relaxation",
+    "intent": "The gate guards itself (M1): this config + baseline may only move forward (stricter) vs HEAD. ARCH_ALLOW_RELAX=1 for a deliberate, reviewed loosening.",
+    "check": { "kind": "config_relaxations", "invariants": "invariants.harness.json", "baseline": "baseline-harness.json", "against": "HEAD" },
+    "max": 0, "severity": "block"
   }
 ]

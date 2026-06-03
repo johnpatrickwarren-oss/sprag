@@ -251,7 +251,7 @@
       "check": {
         "kind": "ast_grep_tree",
         "lang": "ts",
-        "rule": { "kind": "comment", "regex": "@ts-(ignore|nocheck)" }
+        "rule": { "kind": "comment", "regex": "^/[/*]\\s*@ts-(ignore|nocheck)\\b" }
       },
       "mode": "ratchet",
       "severity": "block",

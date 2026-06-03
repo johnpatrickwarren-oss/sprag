@@ -1,4 +1,5 @@
 {
   "no-god-files": 0,
-  "no-god-functions": 1
+  "no-god-functions": 0,
+  "dep-surface": 3
 }

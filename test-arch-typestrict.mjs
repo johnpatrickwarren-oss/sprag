@@ -38,12 +38,13 @@ const ANY = { kind: 'predefined_type', regex: '^any$' };
   expect('non-null `!` counted (= 2), boolean ! ignored', metric(d, writeInv({ kind: 'non_null_expression' })) === 2, `got ${metric(d, writeInv({ kind: 'non_null_expression' }))}`);
 }
 
-// @ts-ignore / @ts-nocheck counted; @ts-expect-error (self-removing) deliberately NOT.
+// directives like @ts-ignore / @ts-nocheck are counted; @ts-expect-error (self-removing) and prose
+// merely mentioning the directive are NOT (the anchored regex requires it at the comment start).
 {
   const d = tmp();
-  writeFileSync(join(d, 'a.ts'), '// @ts-ignore\nconst a = 1;\n// @ts-nocheck\nconst b = 2;\n// @ts-expect-error\nconst c = 3;\n');
-  const inv = writeInv({ kind: 'comment', regex: '@ts-(ignore|nocheck)' });
-  expect('@ts-ignore/@ts-nocheck counted (= 2), @ts-expect-error ignored', metric(d, inv) === 2, `got ${metric(d, inv)}`);
+  writeFileSync(join(d, 'a.ts'), '// @ts-ignore\nconst a = 1;\n// @ts-nocheck\nconst b = 2;\n// @ts-expect-error\nconst c = 3;\n// see @ts-ignore in the docs\nconst e = 4;\n');
+  const inv = writeInv({ kind: 'comment', regex: '^/[/*]\\s*@ts-(ignore|nocheck)\\b' });
+  expect('@ts-ignore/@ts-nocheck directives counted (= 2); expect-error + prose ignored', metric(d, inv) === 2, `got ${metric(d, inv)}`);
 }
 
 // ratchet: baseline the current `any` count, add one more -> block.
