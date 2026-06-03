@@ -26,6 +26,7 @@
     "arch-gate.mjs",
     "ast-engine.mjs",
     "meta-ratchet.mjs",
+    "secret-scan.mjs",
     "metrics.mjs",
     "arch-trend.mjs",
     "arch-loop.mjs",

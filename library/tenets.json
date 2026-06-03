@@ -259,6 +259,22 @@
         "ast-grep (TS/JS), recursive per-file — counts comment nodes matching @ts-ignore / @ts-nocheck (not @ts-expect-error)"
       ],
       "tune": "Ratchet so existing directives are grandfathered, new ones block. Migrate a real exception to `@ts-expect-error` (self-removing) or suppress with `// anchor:allow no-ts-ignore: <reason>`."
+    },
+    {
+      "tenet": "SEC1 — No committed secrets (credentials never enter the tree)",
+      "status": "ready",
+      "id": "no-committed-secrets",
+      "intent": "An API key / token / private key inlined into source — what AI codegen does when it wires up an integration and has a literal credential to hand. It's the supply-chain/security failure a behavioral test and the structural metrics are both blind to: the code works, and the secret is now in git history forever. Scan for it as an absolute gate.",
+      "check": {
+        "kind": "secret_scan",
+        "dirs": ["."]
+      },
+      "max": 0,
+      "severity": "block",
+      "engines": [
+        "deterministic text scan, no model: provider key shapes (AWS/GCP/GitHub/Slack/Stripe/OpenAI/Anthropic/Google) + private-key blocks + a guarded generic secret=\"...\" rule (excludes env refs / placeholders / low-entropy). Only TRACKED files (a gitignored .env is invisible)."
+      ],
+      "tune": "Use an absolute `max: 0` — you never want even one. HIGH-PRECISION by design so it's safe at max:0; it favours misses over false alarms, so it is NOT a replacement for a dedicated secret scanner (gitleaks/trufflehog) or pre-receive hook — it's the always-on floor. Set `dirs` to scope the scan. A real secret is removed + ROTATED (it's compromised once committed); a genuine non-secret false positive is `// anchor:allow no-committed-secrets: <reason>`. Entropy-based detection is a follow-up."
     }
   ]
 }
