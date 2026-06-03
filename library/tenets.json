@@ -1,5 +1,5 @@
 {
-  "about": "Starter library of ready-to-enable architectural invariants: the 5 structural tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ (T1–T5), 2 layering/test-rot invariants (L1–L2), 1 discipline-derived check (D1), and 1 quality-metric check (Q1) — the latter three learned from adopting this gate on real repos + the engineering disciplines it pairs with (classes of decay the size/coupling metrics are blind to). Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols/paths to your codebase. 'status: ready' = implemented check kind; 'status: planned' = on the roadmap (design §4), template shows the intended shape.",
+  "about": "Starter library of ready-to-enable architectural invariants: the 5 structural tenets from https://blog.k10s.dev/im-going-back-to-writing-code-by-hand/ (T1–T5), 2 layering/test-rot invariants (L1–L2), 1 discipline-derived check (D1), and 1 quality-metric check (Q1) — the latter three learned from adopting this gate on real repos + the behavioral disciplines it pairs with (those live in Anchor, not here; classes of decay the size/coupling metrics are blind to). Copy the entries you want into your project's invariants.json and TUNE the thresholds/symbols/paths to your codebase. 'status: ready' = implemented check kind; 'status: planned' = on the roadmap (design §4), template shows the intended shape.",
   "tenets": [
     {
       "tenet": "T1 — Architecture is yours; the coordinator stays thin",
@@ -138,7 +138,7 @@
       "engines": [
         "language-agnostic: counts source files (.ts/.tsx/.js/.mjs/.cjs/.jsx/.go/.py) under `dirs` with no base-name-matching test; excludes the tests themselves, generated artifacts, and barrel index.* files"
       ],
-      "tune": "Set `dirs` to your source roots. Keep `ratchet` (no absolute `max`) so today's untested/legacy files are grandfathered and only NEW untested modules block — set `max: 0` only on a greenfield repo you want fully covered. Override the barrel exclusion with `exclude` (regex on the relative path); suppress a deliberate exception with `// anchor:allow require-tests: <reason>`. Pairs with the test-driven-development discipline in `disciplines.md`."
+      "tune": "Set `dirs` to your source roots. Keep `ratchet` (no absolute `max`) so today's untested/legacy files are grandfathered and only NEW untested modules block — set `max: 0` only on a greenfield repo you want fully covered. Override the barrel exclusion with `exclude` (regex on the relative path); suppress a deliberate exception with `// anchor:allow require-tests: <reason>`. The deterministic shadow of test-driven development; the behavioral discipline itself lives in Anchor."
     },
     {
       "tenet": "Q1 — Bounded function complexity (the principled god-function check)",

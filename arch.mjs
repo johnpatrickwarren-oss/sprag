@@ -44,9 +44,9 @@ export function init(argv) {
   invs.push({ id: 'no-time-bomb-tests', intent: 'No test pinned to a frozen git ref/SHA — round-scoped checks belong in a gate, not the permanent suite.', check: { kind: 'time_bomb_tests', dirs: ['.'] }, max: 0, mode: 'ratchet', severity: 'block' });
   writeFileSync(out, JSON.stringify(invs, null, 2) + '\n');
   console.log(`wrote ${out}  (lang=${lang}, ${invs.length} invariants — tune them, or add tenets from library/tenets.json)`);
-  // Drop the engineering-disciplines block next to it (the behavioral half; reference it from CLAUDE.md).
-  const discOut = join(dirname(out), 'arch-disciplines.md');
-  try { writeFileSync(discOut, readFileSync(join(HERE, 'library', 'disciplines.md'), 'utf8')); console.log(`wrote ${discOut}  (add \`@${discOut.split('/').pop()}\` to your CLAUDE.md so the agent applies them)`); } catch { /* library not present (dev) — skip */ }
+  // Drop a short "working with the gate" note next to it (gate USAGE; the behavioral half lives in Anchor).
+  const useOut = join(dirname(out), 'arch-gate-usage.md');
+  try { writeFileSync(useOut, readFileSync(join(HERE, 'library', 'working-with-the-gate.md'), 'utf8')); console.log(`wrote ${useOut}  (add \`@${useOut.split('/').pop()}\` to your CLAUDE.md; for the behavioral half see Anchor)`); } catch { /* library not present (dev) — skip */ }
   const blOut = out.replace(/\.json$/, '') + '.baseline.json';
   const r = spawnSync('node', [join(HERE, 'arch-gate.mjs'), dir, '--invariants', out, '--baseline', '--baseline-out', blOut], { stdio: 'inherit' });
   if (r.status === 0) {

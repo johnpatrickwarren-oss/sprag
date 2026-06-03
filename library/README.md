@@ -3,7 +3,8 @@
 Ready-to-enable architectural invariants: the **5 structural tenets** from the k10s post ("I'm Going
 Back to Writing Code by Hand"), **2 layering/test-rot invariants** (L1–L2), **1 discipline-derived
 check** (D1), and **1 quality-metric check** (Q1) — learned from adopting this gate on real repos + the
-engineering disciplines it pairs with. `tenets.json` is the catalog; copy the entries you want into your
+behavioral disciplines it pairs with (those live in [Anchor](https://github.com/johnpatrickwarren-oss/anchor),
+not here). `tenets.json` is the catalog; copy the entries you want into your
 project's `invariants.json` and **tune** them (the human still owns the architecture — the gate only enforces it).
 
 | Tenet | Invariant | Check | Status |
@@ -25,8 +26,8 @@ functions** — classes the size/coupling metrics are blind to:
   repo that owns `coordination/`, you would NOT adopt it). Authored to each repo's architecture.
 - **L2** is *universal* — no product should pin a test to a frozen git ref; round-scoped checks belong
   in a gate, not the permanent suite. Usually adopt as-is.
-- **D1** is the deterministic half of test-driven-development (the behavioral half ships in
-  `disciplines.md`) — ratchet it so legacy untested code is grandfathered and only NEW modules need a test.
+- **D1** is the deterministic half of test-driven-development (the behavioral half lives in Anchor) —
+  ratchet it so legacy untested code is grandfathered and only NEW modules need a test.
 - **Q1** is the *less-arbitrary* god-function check — cyclomatic complexity (branchiness) instead of raw
   line count, so a long-but-flat function passes and a short-but-branchy one is flagged. Same zero-token
   cost. Prefer it over (or run it alongside) a `max_function_lines` rule.

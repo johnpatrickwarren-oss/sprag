@@ -259,14 +259,18 @@ the complexity gate (Q1), the **supply-chain** pair (S1–S2), **type-strictness
 `invariants.json` and tune. See
 `library/README.md`.
 
-## Engineering disciplines (the behavioral half)
+## Working with the gate (and the behavioral half)
 
-The gate enforces the *structural* half of quality deterministically. The *behavioral* half — the few
-disciplines that still beat a strong base model — ships as `library/disciplines.md`: **test-driven**,
-**systematic debugging**, **rigorous review-receipt**, and **brainstorm-before-building**, plus the
-"tests green + gate clean before done" habit. `arch init` drops it into the repo as `arch-disciplines.md`;
-reference it from your `CLAUDE.md` (`@arch-disciplines.md`) so the agent applies them in-context — the
-whole quality stack (mechanical floor + behavioral disciplines) with no orchestration harness.
+sprag enforces the **deterministic** half of quality. The **behavioral** half — the disciplines that
+fight a strong model's defaults (cold-eye review, spec-first contract, …) — lives in its companion
+**[Anchor](https://github.com/johnpatrickwarren-oss/anchor)**, whose `DISCIPLINES.md` is the pairing for
+this gate. sprag deliberately carries *no* behavioral-methodology doc of its own — that would just be a
+second copy that drifts.
+
+What sprag *does* ship is `library/working-with-the-gate.md`: the gate-coupled habits — author the
+invariants first, write the test with the code (`require_tests` enforces it; `arch property` validates a
+behavioral one), and run the gate before done (don't `--no-verify`; loosen only on the record). `arch
+init` drops it as `arch-gate-usage.md`; reference it from your `CLAUDE.md` (`@arch-gate-usage.md`).
 
 ## Test efficacy, not test count (`arch mutate`)
 
