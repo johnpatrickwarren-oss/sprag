@@ -10,7 +10,7 @@
 //   arch mutate <dir> --test "<cmd>" [--since ref] [--all]         OPT-IN incremental mutation testing (test efficacy; out-of-band)
 //   arch init   <dir> [--lang go|ts|js] [--out f]                   scaffold generic invariants + baseline
 import { spawnSync } from 'node:child_process';
-import { readdirSync, writeFileSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, writeFileSync, readFileSync, statSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -34,8 +34,8 @@ export function init(argv) {
   const astLangs = { ts: 'ts', js: 'js', go: 'go' };
   const invs = [
     { id: 'no-god-files', intent: 'No source file over 800 lines (God file) — split it.', check: { kind: 'oversized_files', maxLines: 800 }, mode: 'ratchet', severity: 'block' },
-    { id: 'no-god-functions', intent: 'No function over 60 lines (God function) — decompose it. Coarse length floor; pairs with no-complex-functions below.', check: { kind: 'max_function_lines', maxLines: 60 }, mode: 'ratchet', severity: 'block', lang: astLangs[lang] || 'ts', engine: 'ast-grep' },
-    { id: 'no-complex-functions', intent: 'No function with cyclomatic complexity over 12 (1 + decision points + &&/||) — the less-arbitrary signal than length: flags BRANCHY functions, not long-but-flat ones (McCabe/NIST anchor ~10).', check: { kind: 'max_complexity', maxComplexity: 12 }, mode: 'ratchet', severity: 'block', lang: astLangs[lang] || 'ts', engine: 'ast-grep' },
+    { id: 'no-complex-functions', intent: 'PRIMARY function-health gate: no function with cyclomatic complexity over 12 (1 + decision points + &&/||) — the less-arbitrary signal than length, flagging BRANCHY hard-to-test functions, not merely long ones (McCabe/NIST anchor ~10; 12 is a forgiving starter). Pairs with the no-god-functions length backstop below for the long-but-flat case.', check: { kind: 'max_complexity', maxComplexity: 12 }, mode: 'ratchet', severity: 'block', lang: astLangs[lang] || 'ts', engine: 'ast-grep' },
+    { id: 'no-god-functions', intent: 'Coarse BACKSTOP: no function over 150 lines. Complexity (above) is the primary gate; this only catches the huge-but-flat functions complexity misses — giant data tables, long sequential builders/pipelines with few branches. Set high on purpose so it does not fight the complexity gate by flagging clean ~100-line functions.', check: { kind: 'max_function_lines', maxLines: 150 }, mode: 'ratchet', severity: 'block', lang: astLangs[lang] || 'ts', engine: 'ast-grep' },
   ];
   if (lang !== 'go') invs.push({ id: 'no-god-module', intent: 'No module imported by more than 8 files (coupling hub / God module).', check: { kind: 'module_fanin', maxFanin: 8 }, mode: 'ratchet', severity: 'block' });
   // TDD shadow + no-rotting-tests (ratchet: grandfather today's untested/legacy, block new).
@@ -74,4 +74,6 @@ function cli() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) cli();
+// realpathSync(argv[1]) so a symlinked bin / `npm link` entry still matches import.meta.url (which
+// Node resolves to the real path) — otherwise the CLI silently no-ops.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) cli();

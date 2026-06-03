@@ -18,11 +18,11 @@
 // (auditable escape hatch, not silent). Metric/ratchet invariants are "suppressed" by
 // deliberately re-recording the baseline.
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
-import { isGeneratedFile, isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount } from './metrics.mjs';
+import { isGeneratedFile, isSkippedDir, gitTrackedSet, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount } from './metrics.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -210,6 +210,7 @@ function godFunctionCount(dir, maxLines, lang, invId) {
   const exts = FN_EXTS[lang] || FN_EXTS.ts;
   const kinds = FN_KINDS[lang] || FN_KINDS.ts;
   const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  const tracked = gitTrackedSet(dir);
   let over = 0;
   const walk = (d) => {
     for (const n of readdirSync(d)) {
@@ -217,6 +218,7 @@ function godFunctionCount(dir, maxLines, lang, invId) {
       const p = join(d, n);
       if (statSync(p).isDirectory()) { walk(p); continue; }
       if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;
+      if (tracked && !tracked.has(pathResolve(p))) continue;
       const src = readFileSync(p, 'utf8');
       let root;
       try { root = sgRoot(src, lang); } catch { continue; } // parse error: skip this file
@@ -256,6 +258,7 @@ function complexFunctionCount(dir, maxComplexity, lang, invId) {
   const decisionKinds = DECISION_KINDS[lang] || DECISION_KINDS.ts;
   const bools = boolPatterns(lang);
   const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  const tracked = gitTrackedSet(dir);
   let over = 0;
   const walk = (d) => {
     for (const n of readdirSync(d)) {
@@ -263,6 +266,7 @@ function complexFunctionCount(dir, maxComplexity, lang, invId) {
       const p = join(d, n);
       if (statSync(p).isDirectory()) { walk(p); continue; }
       if (!exts.some((e) => n.endsWith(e)) || isGeneratedFile(p)) continue;
+      if (tracked && !tracked.has(pathResolve(p))) continue;
       const src = readFileSync(p, 'utf8');
       let root;
       try { root = sgRoot(src, lang); } catch { continue; } // parse error: skip this file
@@ -379,4 +383,8 @@ function main() {
   process.exit(blocked ? 3 : 0);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+// Run main() when invoked directly. realpathSync(argv[1]) so a SYMLINKED entry (npm link / a
+// global install that symlinks the package dir) still matches import.meta.url, which Node resolves
+// to the real path — otherwise the guard silently fails and the gate becomes a no-op (exit 0, no
+// output), disabling the hook.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) main();

@@ -6,6 +6,7 @@
 // `||`/`&&`/`true` would silently break (count a build artifact, scan node_modules, crash on a bad
 // path, flag a harmless test). Asserting them kills those mutants.
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -28,9 +29,28 @@ const MISSING = '/no/such/arch-gate/dir';
   eq('skip: venv', isSkippedDir('venv'), true);
   eq('skip: site-packages', isSkippedDir('site-packages'), true);
   eq('skip: __pycache__', isSkippedDir('__pycache__'), true);
+  eq('skip: dist build output (gitignored -> would false-regress the ratchet)', isSkippedDir('dist'), true);
+  eq('skip: build output dir', isSkippedDir('build'), true);
+  eq('skip: coverage output dir', isSkippedDir('coverage'), true);
   eq('skip: a *.egg-info dir (suffix match)', isSkippedDir('runway.egg-info'), true);
   eq('skip: a real source dir is NOT skipped', isSkippedDir('runway_core'), false);
   eq('skip: "venvy" is not a false suffix/substring match', isSkippedDir('venvy'), false); }
+
+// ── gitTrackedSet: in a git repo, count only NON-IGNORED files (ratchet correctness) ──────────
+// The working scan must match the `git archive HEAD` baseline (tracked-only), else a gitignored
+// source-like dir inflates the working count and the ratchet false-regresses. `procstate/` is NOT in
+// SKIP_DIRS, so ONLY the git-tracked filter can exclude it.
+{ const d = tmp();
+  execFileSync('git', ['-C', d, 'init', '-q']);
+  mk(d, 'tracked.ts', lines(40)); execFileSync('git', ['-C', d, 'add', 'tracked.ts']); // tracked god-file
+  mk(d, '.gitignore', 'procstate/\n');
+  mk(d, 'procstate/huge.ts', lines(40));  // gitignored god-file (e.g. compiled/process exhaust) -> excluded
+  mk(d, 'scratch.ts', lines(40));          // untracked but NOT ignored -> a new source file, MUST count
+  eq('tracked-filter: counts tracked + untracked-unignored, skips gitignored procstate/',
+    oversizedFilesCount(d, 20), 2); }
+{ const d = tmp(); // a NON-git dir (the archive-baseline / sample-fixture path): filter no-ops, scan all
+  mk(d, 'a.ts', lines(40)); mk(d, 'b.ts', lines(40));
+  eq('tracked-filter: non-git dir scans everything (null filter, no regression)', oversizedFilesCount(d, 20), 2); }
 
 // ── isGeneratedFile ──────────────────────────────────────────────────────────────
 { const d = tmp(); mk(d, 'a.ts', 'x'); // sibling so a.js counts as tsc output

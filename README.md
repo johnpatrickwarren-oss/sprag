@@ -132,7 +132,11 @@ convention, not a law — a long-but-flat function is fine; a short, deeply-bran
 is the less-arbitrary signal: it approximates **cyclomatic complexity** (1 + decision points + short-circuit
 `&&`/`||`) per function from the same AST parse — flagging *branchy* functions (the ones that are genuinely
 hard to follow and test; >~10 is the McCabe/NIST anchor), not merely long ones. Same zero-token, deterministic
-cost as `max_function_lines`. What keeps *any* threshold from being tyrannical is the design, not the number:
+cost as `max_function_lines`.
+
+**Recommended pairing (what `arch init` scaffolds): `max_complexity` is the PRIMARY function gate (~12), `max_function_lines` is a coarse BACKSTOP set high (~150).** They are different axes and neither subsumes the other: a *short, branchy* function (a 40-line, complexity-46 classifier) is invisible to any length rule, while a *long, flat* function (a 200-line data table or sequential builder with few branches) is invisible to complexity. Run both, but set the length bound high so it only catches genuinely-huge-but-flat functions and doesn't fight the complexity gate by flagging clean ~100-line functions. (Length alone is a trap: decomposing by length crushes the worst-complexity tail but tends to *redistribute* branches into more moderate functions rather than remove them — complexity is what actually tracks test/maintenance cost.)
+
+What keeps *any* threshold from being tyrannical is the design, not the number:
 **you** author the limit for your codebase, the **ratchet** enforces "never worse" rather than a magic absolute,
 and a legitimate overrun is recorded with an **auditable suppression** (`// anchor:allow <id>: <reason>`) — visible,
 not silent. The gate surfaces *candidates for judgment*, not verdicts.

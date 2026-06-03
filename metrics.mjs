@@ -7,6 +7,30 @@
 // (+ .egg-info), .git/vendor — see SKIP_DIRS.
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
 import { join, dirname, resolve as pathResolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+
+// Ratchet correctness: the working-tree scan must see the SAME file universe as the `git archive HEAD`
+// baseline. Otherwise gitignored source-like files (a compiled dist/, a gitignored coordination/) are
+// present in the working tree but absent from the archive baseline, so the working count exceeds the
+// baseline and the ratchet FALSE-REGRESSES every commit. So when `dir` is inside a git work tree,
+// restrict every walk to git's NON-IGNORED set (tracked + untracked-but-not-ignored = what a commit
+// would contain). When `dir` is NOT a git repo (the extracted-archive baseline dir, sample fixtures, an
+// arbitrary `arch check <dir>`), return null = scan everything (preserves prior behaviour). The
+// generated-file + SKIP_DIRS filters still apply on top, for tracked-but-not-authored code (a COMMITTED
+// dist/ of compiled .js). Memoized per dir — one `git` fork per dir per process.
+const _trackedCache = new Map();
+export function gitTrackedSet(dir) {
+  if (_trackedCache.has(dir)) return _trackedCache.get(dir);
+  let set = null;
+  try {
+    execFileSync('git', ['-C', dir, 'rev-parse', '--is-inside-work-tree'], { stdio: ['ignore', 'ignore', 'ignore'] });
+    const out = execFileSync('git', ['-C', dir, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    set = new Set();
+    for (const rel of out.split('\0')) if (rel) set.add(pathResolve(dir, rel));
+  } catch { set = null; } // git missing, or not a work tree -> no filtering (scan all)
+  _trackedCache.set(dir, set);
+  return set;
+}
 
 // Generated / build-artifact files are NOT authored source — exclude them so metrics reflect
 // hand-written code and stay DETERMINISTIC regardless of build state (otherwise a `tsc` run that
@@ -21,13 +45,17 @@ export function isGeneratedFile(p) {
   return !!m && (existsSync(m[1] + '.ts') || existsSync(m[1] + '.tsx'));
 }
 
-// Dependency / VCS / tool-cache directories that never hold authored project source. Skipping them
-// keeps every metric on hand-written code: otherwise a Python `.venv` of vendored site-packages (or a
-// JS `node_modules`) swamps the counts — a naive scan of a Python repo reported ~1800 fake God files
-// from playwright/altair/plotly inside `.venv`. This is node_modules' equivalent for the Python world.
+// Dependency / VCS / tool-cache / BUILD-OUTPUT directories that never hold authored project source.
+// Skipping them keeps every metric on hand-written code: otherwise a Python `.venv` of vendored
+// site-packages (or a JS `node_modules`) swamps the counts — a naive scan reported ~1800 fake God
+// files from `.venv`. Build dirs (`dist`/`build`/...) matter for the RATCHET specifically: they are
+// gitignored, so they're absent from the `git archive HEAD` baseline but present in the working tree —
+// counting them makes the working scan exceed the baseline and the ratchet false-regress on every
+// commit. (Mirrors scan.mjs's skip-list.)
 const SKIP_DIRS = new Set([
   'node_modules', '.git', 'vendor',
   '.venv', 'venv', 'site-packages', '__pycache__', '.tox', '.eggs',
+  'dist', 'build', 'coverage', '.next', 'out', '.astro',
 ]);
 export function isSkippedDir(name) {
   return SKIP_DIRS.has(name) || name.endsWith('.egg-info');
@@ -39,6 +67,7 @@ const SRC_EXTS = ['.go', '.ts', '.tsx', '.js', '.mjs', '.jsx', '.py', '.rs', '.j
 export function oversizedFilesCount(dir, maxLines) {
   if (!dir || !existsSync(dir)) return 0;
   let n = 0;
+  const tracked = gitTrackedSet(dir);
   const walk = (d) => {
     for (const name of readdirSync(d)) {
       if (isSkippedDir(name)) continue;
@@ -46,6 +75,7 @@ export function oversizedFilesCount(dir, maxLines) {
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
       if (!SRC_EXTS.some((e) => name.endsWith(e)) || isGeneratedFile(p)) continue;
+      if (tracked && !tracked.has(pathResolve(p))) continue;
       if (readFileSync(p, 'utf8').split('\n').length > maxLines) n++;
     }
   };
@@ -59,13 +89,14 @@ export function oversizedFilesCount(dir, maxLines) {
 const FANIN_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
 export function moduleFaninCount(dir, maxFanin) {
   if (!dir || !existsSync(dir)) return 0;
+  const tracked = gitTrackedSet(dir);
   const files = [];
   const walk = (d) => {
     for (const n of readdirSync(d)) {
       if (isSkippedDir(n)) continue;
       const p = join(d, n);
       if (statSync(p).isDirectory()) walk(p);
-      else if (FANIN_EXTS.some((e) => n.endsWith(e)) && !isGeneratedFile(p)) files.push(p);
+      else if (FANIN_EXTS.some((e) => n.endsWith(e)) && !isGeneratedFile(p) && !(tracked && !tracked.has(pathResolve(p)))) files.push(p);
     }
   };
   walk(dir);
@@ -107,6 +138,7 @@ export function forbidPathRefCount(dir, check, invId) {
   const roots = (check.dirs || ['.']).map((d) => join(dir, d)).filter((p) => existsSync(p));
   const re = new RegExp(check.path);
   const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  const tracked = gitTrackedSet(dir);
   let n = 0;
   const walk = (d) => {
     for (const name of readdirSync(d)) {
@@ -115,6 +147,7 @@ export function forbidPathRefCount(dir, check, invId) {
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
       if (!REF_EXTS.some((e) => name.endsWith(e)) || isGeneratedFile(p)) continue;
+      if (tracked && !tracked.has(pathResolve(p))) continue;
       const raw = readFileSync(p, 'utf8');
       if (supRe && supRe.test(raw)) continue;
       if (re.test(stripComments(raw))) n++;
@@ -137,6 +170,7 @@ export function timeBombTestCount(dir, check, invId) {
   const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
   const gitInvoke = /(?:execSync|execFileSync|spawnSync|\bexec)\s*\(\s*[`'"]git\b|[`'"]\s*git\s+(?:diff|show|rev-list|log|merge-base)\b/;
   const frozenRef = /--name-only|\.\.HEAD|git\s+show\s+[`'"$]?\{?[\w-]*\}?:?[0-9a-f]{7,40}|[0-9a-f]{7,40}\s+HEAD|(?:SHA|sha|ref|baseline|round[_-]?start|frozen)\w*\s*[:=]\s*[`'"][0-9a-f]{7,40}[`'"]/i;
+  const tracked = gitTrackedSet(dir);
   let n = 0;
   const walk = (d) => {
     for (const name of readdirSync(d)) {
@@ -145,6 +179,7 @@ export function timeBombTestCount(dir, check, invId) {
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
       if (!TEST_EXTS.some((e) => name.endsWith(e)) || isGeneratedFile(p)) continue;
+      if (tracked && !tracked.has(pathResolve(p))) continue;
       const raw = readFileSync(p, 'utf8');
       if (supRe && supRe.test(raw)) continue;
       const code = stripComments(raw);
@@ -178,6 +213,7 @@ export function untestedModuleCount(dir, check, invId) {
   if (!roots.length) return 0;
   const excludeRe = check.exclude ? new RegExp(check.exclude) : /(^|\/)index\.(?:ts|tsx|js|mjs|cjs|jsx)$/;
   const supRe = invId && new RegExp(`anchor:allow\\s+${invId}\\b`);
+  const tracked = gitTrackedSet(dir);
   // 1. collect the base name of every test in the WHOLE tree (tests may live anywhere).
   const covered = new Set();
   const collect = (d) => {
@@ -185,6 +221,7 @@ export function untestedModuleCount(dir, check, invId) {
       if (isSkippedDir(name)) continue;
       const p = join(d, name);
       if (statSync(p).isDirectory()) { collect(p); continue; }
+      if (tracked && !tracked.has(pathResolve(p))) continue;
       const b = testCovers(name);
       if (b !== null) covered.add(b);
     }
@@ -199,6 +236,7 @@ export function untestedModuleCount(dir, check, invId) {
       if (statSync(p).isDirectory()) { walk(p); continue; }
       if (!CODE_EXTS.some((e) => name.endsWith(e))) continue;
       if (testCovers(name) !== null || isGeneratedFile(p) || excludeRe.test(p)) continue;
+      if (tracked && !tracked.has(pathResolve(p))) continue;
       if (supRe && supRe.test(readFileSync(p, 'utf8'))) continue;
       if (!covered.has(srcBase(name))) n++;
     }
