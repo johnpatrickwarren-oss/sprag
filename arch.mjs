@@ -10,7 +10,7 @@
 //   arch mutate <dir> --test "<cmd>" [--since ref] [--all]         OPT-IN incremental mutation testing (test efficacy; out-of-band)
 //   arch init   <dir> [--lang go|ts|js] [--out f]                   scaffold generic invariants + baseline
 import { spawnSync } from 'node:child_process';
-import { readdirSync, writeFileSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, writeFileSync, readFileSync, statSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -74,4 +74,6 @@ function cli() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) cli();
+// realpathSync(argv[1]) so a symlinked bin / `npm link` entry still matches import.meta.url (which
+// Node resolves to the real path) — otherwise the CLI silently no-ops.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) cli();

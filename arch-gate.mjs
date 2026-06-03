@@ -18,7 +18,7 @@
 // (auditable escape hatch, not silent). Metric/ratchet invariants are "suppressed" by
 // deliberately re-recording the baseline.
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname, resolve as pathResolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -383,4 +383,8 @@ function main() {
   process.exit(blocked ? 3 : 0);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+// Run main() when invoked directly. realpathSync(argv[1]) so a SYMLINKED entry (npm link / a
+// global install that symlinks the package dir) still matches import.meta.url, which Node resolves
+// to the real path — otherwise the guard silently fails and the gate becomes a no-op (exit 0, no
+// output), disabling the hook.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) main();
