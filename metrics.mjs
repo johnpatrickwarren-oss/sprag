@@ -247,6 +247,33 @@ export function untestedModuleCount(dir, check, invId) {
   return n;
 }
 
+// test_signal (anti test-gaming): total ACTIVE test signal = test cases (it/test calls) + assertions across
+// test files under `dirs`. Pair with `mode: 'floor'` so the count can only GROW — catching the ways an agent
+// weakens tests under pressure that require_tests misses: deleting a test (cases+asserts drop), skipping one
+// (`it.skip(`/`xit(` no longer match the case regex), or trimming assertions (asserts drop). `require_tests`
+// only fires when a source file loses its ONLY test; this guards the strength of the tests that remain.
+export function testSignalCount(dir, check) {
+  if (!dir || !existsSync(dir)) return 0;
+  const roots = (check.dirs || ['.']).map((d) => join(dir, d)).filter((p) => existsSync(p));
+  const tracked = gitTrackedSet(dir);
+  let signal = 0;
+  const walk = (d) => {
+    for (const name of readdirSync(d)) {
+      if (isSkippedDir(name)) continue;
+      const p = join(d, name);
+      if (statSync(p).isDirectory()) { walk(p); continue; }
+      if (testCovers(name) === null) continue;                          // test files only
+      if (tracked && !tracked.has(pathResolve(p))) continue;
+      const src = readFileSync(p, 'utf8');
+      const cases = (src.match(/\b(?:it|test)\s*\(/g) || []).length;     // `it.skip(`/`xit(` don't match -> skipped excluded
+      const asserts = (src.match(/\bassert\b|\bexpect\s*\(/g) || []).length;
+      signal += cases + asserts;
+    }
+  };
+  for (const r of roots) walk(r);
+  return signal;
+}
+
 // require_paths: a required artifact must EXIST — the deterministic floor under a discipline whose
 // durable outcome is "an artifact is present" (e.g. Anchor's "durable project trail": PROJECT-TRAIL.md /
 // an ADR or decisions/ dir). Like require_tests is the deterministic shadow of TDD, this can't prove the
