@@ -18,5 +18,11 @@ const gate = (dir) => { const r = spawnSync('node', [GATE, dir, '--invariants', 
 // no hub: each imports its own pair
 { const d = mkdtempSync(join(tmpdir(), 'arch-fi-')); for (let i = 0; i < 4; i++) { writeFileSync(join(d, `a${i}.mjs`), `import './b${i}.mjs';\n`); writeFileSync(join(d, `b${i}.mjs`), 'export const y = 1;\n'); }
   const r = gate(d); expect('no hub (fan-in 1 each) PASSES', r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
+// TEST imports are NOT coupling: ./util.mjs imported by 2 production files + 4 tests -> fan-in 2 (PASS),
+// not 6 (which would BLOCK). A widely-tested core module must not read as a God-module hub.
+{ const d = mkdtempSync(join(tmpdir(), 'arch-fi-')); writeFileSync(join(d, 'util.mjs'), 'export const U = 1;\n');
+  for (const p of ['prodA', 'prodB']) writeFileSync(join(d, `${p}.mjs`), `import { U } from './util.mjs';\nexport const x = U;\n`);
+  for (let i = 0; i < 4; i++) writeFileSync(join(d, `t${i}.test.mjs`), `import { U } from './util.mjs';\nif (!U) throw 0;\n`);
+  const r = gate(d); expect('test imports excluded from fan-in (2 prod + 4 tests -> PASS)', r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
 console.log(failed === 0 ? '\nPASS: fan-in flags a God-module hub, passes a decoupled tree ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
