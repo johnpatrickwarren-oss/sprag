@@ -21,7 +21,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount, testSignalCount, dependencyCount, unlockedDependencyCount, missingPathCount } from './metrics.mjs';
+import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount, testSignalCount, weakenedTestFilesCount, dependencyCount, unlockedDependencyCount, missingPathCount } from './metrics.mjs';
 import { secretScanCount } from './secret-scan.mjs';
 import { astgrepMetric, godFunctionCount, complexFunctionCount, astgrepTreeCount } from './ast-engine.mjs';
 import { configRelaxationCount } from './meta-ratchet.mjs';
@@ -129,6 +129,7 @@ export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'time_bomb_tests') return timeBombTestCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'require_tests') return untestedModuleCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'test_signal') return testSignalCount(dir, inv.check);
+  if (inv.check.kind === 'test_file_weakened') return weakenedTestFilesCount(dir, inv.check);
   if (inv.check.kind === 'require_paths') return missingPathCount(dir, inv.check);
   if (inv.check.kind === 'dependency_count') return dependencyCount(dir, inv.check);
   if (inv.check.kind === 'unlocked_dependencies') return unlockedDependencyCount(dir, inv.check);

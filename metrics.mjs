@@ -6,7 +6,7 @@
 // "Skips ... deps/vcs" below means isSkippedDir: node_modules, .venv/venv/site-packages/__pycache__
 // (+ .egg-info), .git/vendor — see SKIP_DIRS.
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
-import { join, dirname, resolve as pathResolve } from 'node:path';
+import { join, dirname, relative, resolve as pathResolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 // Ratchet correctness: the working-tree scan must see the SAME file universe as the `git archive HEAD`
@@ -252,26 +252,53 @@ export function untestedModuleCount(dir, check, invId) {
 // weakens tests under pressure that require_tests misses: deleting a test (cases+asserts drop), skipping one
 // (`it.skip(`/`xit(` no longer match the case regex), or trimming assertions (asserts drop). `require_tests`
 // only fires when a source file loses its ONLY test; this guards the strength of the tests that remain.
-export function testSignalCount(dir, check) {
-  if (!dir || !existsSync(dir)) return 0;
+// Active test signal of one file's source: test cases (`it.skip(`/`xit(` excluded by the regex) + assertions.
+function fileTestSignal(src) {
+  const cases = (src.match(/\b(?:it|test)\s*\(/g) || []).length;
+  const asserts = (src.match(/\bassert\b|\bexpect\s*\(/g) || []).length;
+  return cases + asserts;
+}
+// Walk tracked test files under check.dirs, calling fn(absPath, relPathFromDir).
+function walkTestFiles(dir, check, fn) {
   const roots = (check.dirs || ['.']).map((d) => join(dir, d)).filter((p) => existsSync(p));
   const tracked = gitTrackedSet(dir);
-  let signal = 0;
-  const walk = (d) => {
+  const visit = (d) => {
     for (const name of readdirSync(d)) {
       if (isSkippedDir(name)) continue;
       const p = join(d, name);
-      if (statSync(p).isDirectory()) { walk(p); continue; }
+      if (statSync(p).isDirectory()) { visit(p); continue; }
       if (testCovers(name) === null) continue;                          // test files only
       if (tracked && !tracked.has(pathResolve(p))) continue;
-      const src = readFileSync(p, 'utf8');
-      const cases = (src.match(/\b(?:it|test)\s*\(/g) || []).length;     // `it.skip(`/`xit(` don't match -> skipped excluded
-      const asserts = (src.match(/\bassert\b|\bexpect\s*\(/g) || []).length;
-      signal += cases + asserts;
+      fn(p, relative(dir, p));
     }
   };
-  for (const r of roots) walk(r);
+  for (const r of roots) visit(r);
+}
+
+export function testSignalCount(dir, check) {
+  if (!dir || !existsSync(dir)) return 0;
+  let signal = 0;
+  walkTestFiles(dir, check, (p) => { signal += fileTestSignal(readFileSync(p, 'utf8')); });
   return signal;
+}
+
+// test_file_weakened (PER-FILE anti-gaming): count tracked test files whose active signal DROPPED vs HEAD —
+// catching a strong-for-weak SWAP within a file (or a skip/trim) that the NET test_signal floor permits when
+// it's offset by new tests elsewhere. Git-based (working tree vs HEAD, like config_relaxations); pair with
+// `max: 0`. Abstains (0) when there's no git HEAD; a file new in the working tree is not a weakening.
+export function weakenedTestFilesCount(dir, check) {
+  if (!dir || !existsSync(dir)) return 0;
+  try { execFileSync('git', ['-C', dir, 'rev-parse', '--verify', '-q', 'HEAD'], { stdio: ['ignore', 'ignore', 'ignore'] }); }
+  catch { return 0; }                                                   // no HEAD -> can't compare
+  let weakened = 0;
+  walkTestFiles(dir, check, (p, rel) => {
+    const now = fileTestSignal(readFileSync(p, 'utf8'));
+    let before;
+    try { before = fileTestSignal(execFileSync('git', ['-C', dir, 'show', `HEAD:${rel}`], { encoding: 'utf8' })); }
+    catch { return; }                                                   // file not in HEAD (new) -> not a weakening
+    if (now < before) weakened++;
+  });
+  return weakened;
 }
 
 // require_paths: a required artifact must EXIST — the deterministic floor under a discipline whose
