@@ -21,7 +21,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount, dependencyCount, unlockedDependencyCount, missingPathCount } from './metrics.mjs';
+import { isSkippedDir, oversizedFilesCount, moduleFaninCount, forbidPathRefCount, timeBombTestCount, untestedModuleCount, testSignalCount, dependencyCount, unlockedDependencyCount, missingPathCount } from './metrics.mjs';
 import { secretScanCount } from './secret-scan.mjs';
 import { astgrepMetric, godFunctionCount, complexFunctionCount, astgrepTreeCount } from './ast-engine.mjs';
 import { configRelaxationCount } from './meta-ratchet.mjs';
@@ -128,6 +128,7 @@ export function metricValue(inv, src, dir) {
   if (inv.check.kind === 'forbid_path') return forbidPathRefCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'time_bomb_tests') return timeBombTestCount(dir, inv.check, inv.id);
   if (inv.check.kind === 'require_tests') return untestedModuleCount(dir, inv.check, inv.id);
+  if (inv.check.kind === 'test_signal') return testSignalCount(dir, inv.check);
   if (inv.check.kind === 'require_paths') return missingPathCount(dir, inv.check);
   if (inv.check.kind === 'dependency_count') return dependencyCount(dir, inv.check);
   if (inv.check.kind === 'unlocked_dependencies') return unlockedDependencyCount(dir, inv.check);
@@ -172,6 +173,10 @@ export function computeViolations(invariants, metrics, baseline) {
     if (typeof inv.max === 'number' && v > inv.max) reasons.push(`${v} exceeds absolute max ${inv.max}`);
     if (inv.mode === 'ratchet' && typeof baseline[inv.id] === 'number' && v > baseline[inv.id]) {
       reasons.push(`regressed ${baseline[inv.id]} -> ${v} (ratchet: must not increase)`);
+    }
+    // floor: the INVERSE ratchet — a "good" signal (e.g. test_signal) that must never DROP below baseline.
+    if (inv.mode === 'floor' && typeof baseline[inv.id] === 'number' && v < baseline[inv.id]) {
+      reasons.push(`dropped ${baseline[inv.id]} -> ${v} (floor: must not decrease)`);
     }
     if (reasons.length) violations.push({ id: inv.id, value: v, baseline: baseline[inv.id], reasons, intent: inv.intent, severity: inv.severity });
   }
