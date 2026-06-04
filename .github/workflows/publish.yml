@@ -1,0 +1,41 @@
+name: publish
+# Publish to npm on a push to main — but ONLY when package.json's version isn't already published, so
+# merges that don't bump the version are no-ops (no failed republish, no duplicate releases). Release flow:
+# bump the version in a PR (`npm version patch`) -> merge -> this ships it. No hand-running `npm publish`.
+#
+# One-time setup: add a repo secret NPM_TOKEN — an npm "Automation" access token (bypasses 2FA for CI).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write          # npm provenance attestation (supply-chain proof — fitting for a gate tool)
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false   # never interrupt an in-flight publish
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci || npm install
+      - run: npm test          # don't ship a broken gate
+      - name: Publish if the version is new
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already on npm — nothing to publish."
+          else
+            echo "publishing $NAME@$VER"
+            npm publish --provenance --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
