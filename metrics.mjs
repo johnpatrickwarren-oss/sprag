@@ -83,9 +83,11 @@ export function oversizedFilesCount(dir, maxLines) {
   return n;
 }
 
-// module_fanin (generic coupling): how many distinct files import each LOCAL module; flags hub
-// modules imported by more than maxFanin files — the k10s "everything depends on the God object"
-// smell. Relative-import based (JS/TS family); language-agnostic in spirit.
+// module_fanin (generic coupling): how many distinct PRODUCTION files import each LOCAL module; flags hub
+// modules imported by more than maxFanin files — the k10s "everything depends on the God object" smell.
+// Relative-import based (JS/TS family); language-agnostic in spirit. TEST files are NOT counted as importers:
+// a test depending on a module is healthy coverage, not coupling debt, so they don't inflate a core module's
+// fan-in (otherwise a widely-tested utility reads as a God object). Detected via the same testCovers heuristic.
 const FANIN_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
 export function moduleFaninCount(dir, maxFanin) {
   if (!dir || !existsSync(dir)) return 0;
@@ -96,7 +98,7 @@ export function moduleFaninCount(dir, maxFanin) {
       if (isSkippedDir(n)) continue;
       const p = join(d, n);
       if (statSync(p).isDirectory()) walk(p);
-      else if (FANIN_EXTS.some((e) => n.endsWith(e)) && !isGeneratedFile(p) && !(tracked && !tracked.has(pathResolve(p)))) files.push(p);
+      else if (FANIN_EXTS.some((e) => n.endsWith(e)) && !isGeneratedFile(p) && testCovers(n) === null && !(tracked && !tracked.has(pathResolve(p)))) files.push(p);
     }
   };
   walk(dir);
