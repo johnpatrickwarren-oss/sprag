@@ -47,5 +47,21 @@ expect('report flags first absolute-max breach', /model-not-god-object.*BREACHED
   human.split('\n').filter((l) => /BREACHED|never breached/.test(l)).join(' | '));
 expect('report shows trending-worse warning', /trending worse/.test(human), '(no warning line)');
 
+// L3 regression: a repo path containing a shell metacharacter (here a double quote) must not be
+// shell-interpolated — the old bash -c string broke on it and silently produced all-zero metrics.
+{
+  const qroot = mkdtempSync(join(tmpdir(), 'arch-trend-q-'));
+  const qrepo = join(qroot, 'we"ird repo');
+  mkdirSync(join(qrepo, 'src'), { recursive: true });
+  writeFileSync(join(qrepo, 'src', 'ui.go'), CLEAN);
+  sh('git init -q && git config user.email t@t && git config user.name t && git add -A && git commit -q --no-verify -m init', qrepo);
+  const q = spawnSync('node', [TREND, qrepo, 'src', '--json'], { encoding: 'utf8' });
+  let qdata = {};
+  try { qdata = JSON.parse(q.stdout); } catch { /* */ }
+  const qseries = (qdata.rows || []).map((row) => row.metrics['model-not-god-object']);
+  expect('repo path with a quote is extracted correctly (no shell interpolation, no silent zeros)',
+    q.status === 0 && qseries.length === 1 && qseries[0] === 6, `exit ${q.status} series=${JSON.stringify(qseries)} ${q.stderr}`);
+}
+
 console.log(failed === 0 ? '\nPASS: trend surfaces accumulating rot + first breach early ✅' : `\nFAIL: ${failed} case(s)`);
 process.exit(failed ? 1 : 0);
