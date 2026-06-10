@@ -36,5 +36,15 @@ const mk = () => { const d = mkdtempSync(join(tmpdir(), 'arch-tb-')); mkdirSync(
     + `test('anti-scope', () => { execSync(\`git diff \${SHA}..HEAD --name-only\`); });\n`);
   const r = gate(d); expect('suppressed time-bomb NOT counted', r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
 
+// 4. L7: Go and Python test-naming conventions are seen too (was JS-family-only -> silent 0)
+{ const d = mk();
+  writeFileSync(join(d, 'test', 'scope_test.go'),
+    'package scope\n\nimport "os/exec"\n\nconst roundSHA = "9e24aa4aa"\n\nfunc TestAntiScope(t *testing.T) {\n\texec.Command("bash", "-c", "git diff " + roundSHA + "..HEAD --name-only").Run()\n}\n');
+  const r = gate(d); expect('frozen-ref _test.go BLOCKED (Go convention seen)', r.code === 3 && /✗ \[no-time-bomb-tests\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
+{ const d = mk();
+  writeFileSync(join(d, 'test', 'test_scope.py'),
+    'import subprocess\n\nROUND_SHA = "9e24aa4aa"\n\ndef test_anti_scope():\n    subprocess.run("git diff " + ROUND_SHA + "..HEAD --name-only", shell=True)\n');
+  const r = gate(d); expect('frozen-ref test_*.py BLOCKED (Python convention seen)', r.code === 3 && /✗ \[no-time-bomb-tests\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
 console.log(failed === 0 ? '\nPASS: time_bomb_tests flags frozen-ref tests, ignores product hashes, honors suppression ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
