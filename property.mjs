@@ -24,7 +24,10 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
-const dir = argv.find((a) => !a.startsWith('--'));
+// First positional = <dir>: skip value-taking flags AND their values, so `--prop "<cmd>" <dir>`
+// can't have the command string mistaken for the dir.
+const VALUE_OPTS = new Set(['--prop', '--target', '--min-kill', '--since', '--prop-file']);
+const dir = (() => { for (let i = 0; i < argv.length; i++) { const a = argv[i]; if (VALUE_OPTS.has(a)) i++; else if (!a.startsWith('--')) return a; } return null; })();
 const opt = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
 const PROP = opt('--prop');
 if (!dir || !PROP) { console.error('usage: arch property <dir> --prop "<cmd>" [--target <dir>] [--min-kill 50] [--all | --since <ref>] [--prop-file <f>] [--strict-restatement]'); process.exit(64); }

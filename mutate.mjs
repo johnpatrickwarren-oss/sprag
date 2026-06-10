@@ -21,7 +21,10 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
-const dir = argv.find((a) => !a.startsWith('--'));
+// First positional = <dir>: skip value-taking flags AND their values, so `--since main <dir>`
+// can't have 'main' mistaken for the dir.
+const VALUE_OPTS = new Set(['--test', '--since', '--threshold', '--max-mutants', '--cwd', '--exclude']);
+const dir = (() => { for (let i = 0; i < argv.length; i++) { const a = argv[i]; if (VALUE_OPTS.has(a)) i++; else if (!a.startsWith('--')) return a; } return null; })();
 const opt = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
 const has = (n) => argv.includes(n);
 const TEST = opt('--test');

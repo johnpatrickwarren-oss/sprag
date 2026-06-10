@@ -90,5 +90,13 @@ const mutate = (d, extra = []) => {
   expect('dir scope does NOT leak the sibling src-other/ (separator-boundary match)',
     !/src-other/.test(out), `exit ${r.status}: ${out}`); }
 
+// 6. options BEFORE the dir: `--since HEAD <dir>` must not take the flag VALUE ('HEAD') as the dir.
+{ const d = mkdtempSync(join(tmpdir(), 'arch-mut-optfirst-'));
+  writeFileSync(join(d, 'm.mjs'), MOD);
+  const r = spawnSync('node', [MUT, '--test', 'true', '--all', d, '--cwd', d], { encoding: 'utf8' });
+  const out = r.stdout + r.stderr;
+  expect('mutate with options before <dir> mutates the dir (not the flag value)',
+    r.status === 3 && /across 1 file\(s\)/.test(out), `exit ${r.status}: ${out}`); }
+
 console.log(failed === 0 ? '\nPASS: mutation testing gates on EFFICACY — kills-bugs, not test count/coverage ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);

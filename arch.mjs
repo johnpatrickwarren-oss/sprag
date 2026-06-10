@@ -26,9 +26,20 @@ export function detectLang(dir) {
   return Object.entries(count).sort((a, b) => b[1] - a[1])[0][0];
 }
 
+// First positional argument: skip each known value-taking flag AND its value, so an option before
+// the dir (`init --lang ts <dir>`) can't have its VALUE mistaken for the dir.
+export function firstPositional(argv, valueFlags) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (valueFlags.has(a)) i++;
+    else if (!a.startsWith('--')) return a;
+  }
+  return null;
+}
+
 // `arch init`: scaffold a starting invariant set (generic, no-tuning checks) + a baseline.
 export function init(argv) {
-  const dir = argv.find((a) => !a.startsWith('--'));
+  const dir = firstPositional(argv, new Set(['--lang', '--out']));
   if (!dir) { console.error('usage: arch init <dir> [--lang go|ts|js] [--out f]'); process.exit(64); }
   const li = argv.indexOf('--lang'); const lang = li >= 0 ? argv[li + 1] : detectLang(dir);
   const oi = argv.indexOf('--out'); const out = oi >= 0 ? argv[oi + 1] : join(dir, 'arch-invariants.json');
