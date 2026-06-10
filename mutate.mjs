@@ -16,7 +16,7 @@
 //   --cwd         Working dir for the test command (default: the repo root).
 //   --exclude G   Comma-separated path globs to skip (e.g. 'corpus/**,test-*.mjs') — fixtures + tests
 //                 the .test./.spec. heuristic misses. `*` = within a segment, `**` = across segments.
-import { readdirSync, statSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -63,9 +63,19 @@ if (has('--all')) {
   // Fail LOUDLY on a git error (e.g. an unfetched ref in CI). Conflating "git couldn't resolve the
   // base" with "no files changed" would make the gate silently pass — worse than no gate.
   if (r.status !== 0) { console.error(`mutate: 'git diff --name-only ${ref}' failed (exit ${r.status}). Is '${ref}' fetched? ${(r.stderr || '').trim()}`); process.exit(64); }
-  const dirAbs = resolve(dir); // git paths are repo-relative -> absolute; the dir scope must be too (dir='.' is the whole repo)
-  targets = (r.stdout || '').split('\n').filter(Boolean).map((f) => join(repoRoot, f))
-    .filter((p) => p.startsWith(dirAbs) && existsSync(p) && SRC.some((e) => p.endsWith(e)) && !isTest(p) && !isGen(p) && !excluded(p));
+  // git paths are repo-relative -> absolute; the dir scope must be too (dir='.' is the whole repo).
+  // realpath the scope dir: `git rev-parse --show-toplevel` returns the REAL path (e.g.
+  // /private/tmp on macOS), so an un-realpathed scope (/tmp/...) would match nothing and the run
+  // would silently no-op. Match on a path-separator boundary so a sibling dir sharing the raw
+  // string prefix (src vs src-other/) cannot leak into the scope.
+  let dirAbs = resolve(dir);
+  try { dirAbs = realpathSync(dirAbs); } catch { /* keep resolve()d path if it can't be realpathed */ }
+  const changed = (r.stdout || '').split('\n').filter(Boolean);
+  targets = changed.map((f) => join(repoRoot, f))
+    .filter((p) => (p === dirAbs || p.startsWith(dirAbs + '/')) && existsSync(p) && SRC.some((e) => p.endsWith(e)) && !isTest(p) && !isGen(p) && !excluded(p));
+  // Loud, not silent: a non-empty diff that the dir scope filtered down to nothing is worth a
+  // note (the classic wrong-<dir> mistake) — distinct from "nothing changed at all".
+  if (!targets.length && changed.length) console.error(`mutate: NOTE ${changed.length} changed file(s) vs ${ref}, but none are mutable source under ${dirAbs} (wrong <dir>?).`);
 }
 if (!targets.length) { console.log('mutate: no changed source files (use --all, or --since <ref>). nothing to mutate.'); process.exit(0); }
 
