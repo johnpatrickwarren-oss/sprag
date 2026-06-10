@@ -242,3 +242,8 @@ malicious patterns were found.
 `test-arch-real-repos.mjs`, self-skips without `ANCHOR_CORPUS_DIR`). All findings above were confirmed
 against the passing suite — they live in paths the suite doesn't exercise (loop fail-open, `on:`
 selector, mutate scoping, hook index gap, option-order parsing).
+
+## Remediation status (2026-06-10, branch `fix/remediation-2026-06-10`)
+
+All 16 findings fixed (none deferred), each with a regression test reproduced failing before its fix
+where practical. `npm test` after remediation: **36/36 suites passed**.
