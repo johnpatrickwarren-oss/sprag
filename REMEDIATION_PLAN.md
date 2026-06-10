@@ -224,7 +224,7 @@ malicious patterns were found.
 - [x] **H2** — `ast-engine.mjs`: make `switch_case_count` honor `check.on` and stop indexing `sw[0]`; add multi-switch fixtures.
 - [x] **H3** — `mutate.mjs`: dir scope must match on a path-separator boundary (`dirAbs + '/'`).
 - [x] **H4** — `mutate.mjs`: realpath `dir`/`repoRoot` before comparison; warn when scope filters out a non-empty diff.
-- [ ] **M1** — `install-hook.sh`: gate the staged index (`git checkout-index --prefix`) instead of the working tree; add stage-then-revert test.
+- [x] **M1** — `install-hook.sh`: gate the staged index (`git checkout-index --prefix`) instead of the working tree; add stage-then-revert test.
 - [ ] **M2** — commit `package-lock.json`, un-ignore it, drop `|| npm install` from the three workflows (makes the dogfooded `no-unlocked-deps` check real).
 - [ ] **M3** — fix positional-arg parsing in `arch.mjs init`, `mutate.mjs`, `property.mjs` (skip flag values).
 - [ ] **M4** — implement or remove `severity: "warn"` semantics; align THREAT-MODEL/README wording.

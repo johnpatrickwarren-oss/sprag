@@ -94,19 +94,21 @@ export function astgrepMetric(inv, src) {
     return cls.findAll({ rule: { kind: 'public_field_definition' } }).length
       + cls.findAll({ rule: { kind: 'property_signature' } }).length;
   }
-  if (c.kind === 'switch_case_count') {
-    const sw = root.findAll({ rule: { kind: isGo ? 'expression_switch_statement' : 'switch_statement' } });
-    // Honor the declared dispatch expression (`on:`): count only switches whose subject matches —
-    // matching the heuristic engine — instead of indexing the FIRST switch in the concatenated
-    // source (which made the metric track whatever switch happened to sort first). Without `on`,
-    // sum over every switch (total dispatch branching), never just sw[0].
-    const subject = (n) => (n.field('value')?.text() ?? '').replace(/^\((.*)\)$/s, '$1').trim();
-    const matching = c.on ? sw.filter((n) => subject(n) === c.on) : sw;
-    let total = 0;
-    for (const s of matching) total += s.findAll({ rule: { kind: isGo ? 'expression_case' : 'switch_case' } }).length;
-    return total;
-  }
+  if (c.kind === 'switch_case_count') return switchCaseCount(root, c, isGo);
   throw new Error(`ast-grep: unknown check kind ${c.kind}`);
+}
+
+// switch_case_count: honor the declared dispatch expression (`on:`) — count only switches whose
+// subject matches (mirrors the heuristic engine) instead of indexing the FIRST switch in the
+// concatenated source (which made the metric track whatever switch happened to sort first).
+// Without `on`, sum over every switch (total dispatch branching), never just sw[0].
+function switchCaseCount(root, c, isGo) {
+  const sw = root.findAll({ rule: { kind: isGo ? 'expression_switch_statement' : 'switch_statement' } });
+  const subject = (n) => (n.field('value')?.text() ?? '').replace(/^\((.*)\)$/s, '$1').trim();
+  const matching = c.on ? sw.filter((n) => subject(n) === c.on) : sw;
+  let total = 0;
+  for (const s of matching) total += s.findAll({ rule: { kind: isGo ? 'expression_case' : 'switch_case' } }).length;
+  return total;
 }
 
 // Shared per-language function-node kinds (used by the recursive God-function + complexity walkers

@@ -30,7 +30,12 @@ ARCH_SRCS="$SRC"                          # comma-separated list of src-rel dirs
 repo="\$(git rev-parse --show-toplevel)"
 tmp="\$(mktemp -d)"; trap 'rm -rf "\$tmp"' EXIT
 have_head=0; git rev-parse --verify -q HEAD >/dev/null && have_head=1
-[ "\$have_head" = 1 ] && git archive HEAD | tar -x -C "\$tmp" 2>/dev/null || true   # HEAD tree once
+mkdir -p "\$tmp/head"
+[ "\$have_head" = 1 ] && git archive HEAD | tar -x -C "\$tmp/head" 2>/dev/null || true   # HEAD tree once
+# Gate the INDEX (what is actually being committed), not the working tree: staging rot and
+# reverting the working copy must still BLOCK, and unstaged dirt must not block a clean commit
+# (mirrors the meta-ratchet's from:"index" defense, but for code).
+git -C "\$repo" checkout-index -a --prefix="\$tmp/staged/"
 
 fail=0
 IFS=',' read -ra _DIRS <<< "\$ARCH_SRCS"
@@ -38,11 +43,11 @@ for d in "\${_DIRS[@]}"; do
   [ -n "\$d" ] || continue
   bl="\$tmp/baseline-\$(printf '%s' "\$d" | tr '/.' '__').json"
   echo '{}' > "\$bl"                       # no HEAD (or dir absent in HEAD) -> only absolute checks
-  if [ "\$have_head" = 1 ] && [ -d "\$tmp/\$d" ]; then
-    node "\$ARCH_GATE" "\$tmp/\$d" $INV_FLAG --baseline --baseline-out "\$bl" >/dev/null 2>&1 || true
+  if [ "\$have_head" = 1 ] && [ -d "\$tmp/head/\$d" ]; then
+    node "\$ARCH_GATE" "\$tmp/head/\$d" $INV_FLAG --baseline --baseline-out "\$bl" >/dev/null 2>&1 || true
   fi
-  if [ -d "\$repo/\$d" ]; then
-    node "\$ARCH_GATE" "\$repo/\$d" $INV_FLAG --baseline-in "\$bl" || fail=1
+  if [ -d "\$tmp/staged/\$d" ]; then
+    node "\$ARCH_GATE" "\$tmp/staged/\$d" $INV_FLAG --baseline-in "\$bl" || fail=1
   fi
 done
 
