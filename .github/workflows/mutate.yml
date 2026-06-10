@@ -44,7 +44,7 @@ jobs:
         with: { fetch-depth: 0 } # full history so `git diff origin/<base>` resolves
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
-      - run: npm ci || npm install
+      - run: npm ci
       # Use the PR base SHA (reachable thanks to fetch-depth: 0) — `origin/<base>` is not a resolvable
       # ref in a PR checkout, and mutate now errors rather than silently passing on a bad base.
       - name: Mutate changed detector source vs base
@@ -60,6 +60,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
-      - run: npm ci || npm install
+      - run: npm ci
       - name: Mutate all source (full baseline)
         run: node mutate.mjs . --all --test "npm test" --exclude "$EXCLUDE" --threshold "${{ github.event.inputs.threshold || '50' }}" --max-mutants 600 || true
