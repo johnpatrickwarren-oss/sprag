@@ -40,5 +40,22 @@ spawnSync('node', [GATE, SAMPLE, '--invariants', INV, '--baseline', '--baseline-
   const r = gate(goWith(go));
   expect('Go rot: 40-line function  BLOCKED on no-god-functions', r.code === 3 && /✗ \[no-god-functions\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
 
+// H2 regression pair: switch_case_count must honor `on: m.view`, not just count the FIRST switch
+// in the (alphabetically) concatenated source. A decoy file sorting before ui.go holds an unrelated
+// 6-case `switch k`.
+const DECOY = 'package ui\n\nfunc decoy(k int) {\n\tswitch k {\n\tcase 1:\n\tcase 2:\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\tcase 6:\n\t}\n}\n';
+{ // (a) the unrelated switch must not be counted -> no false block
+  const d = goWith(CLEAN); writeFileSync(join(d, 'aa_decoy.go'), DECOY);
+  const r = gate(d);
+  expect('Go: unrelated 6-case switch (sorted first) does NOT false-block bounded-dispatch (on: m.view)',
+    r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
+{ // (b) growth of the DECLARED m.view dispatch is still caught with the decoy present
+  const go = CLEAN.replace('\tcase "nodes":\n\t\tm.views["nodes"] = m.views["nodes"].Update(msg)\n',
+    '\tcase "nodes":\n\t\tm.views["nodes"] = m.views["nodes"].Update(msg)\n\tcase "svc":\n\t\tm.views["svc"] = m.views["svc"].Update(msg)\n');
+  const d = goWith(go); writeFileSync(join(d, 'aa_decoy.go'), DECOY);
+  const r = gate(d);
+  expect('Go: +m.view dispatch case BLOCKED even with an unrelated switch sorted first',
+    r.code === 3 && /✗ \[bounded-dispatch\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
 console.log(failed === 0 ? '\nPASS: real Go AST (ast-grep/lang-go) enforces the tenets incl. goroutine-mutation ✅' : `\nFAIL: ${failed} case(s)`);
 process.exit(failed ? 1 : 0);

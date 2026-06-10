@@ -96,8 +96,15 @@ export function astgrepMetric(inv, src) {
   }
   if (c.kind === 'switch_case_count') {
     const sw = root.findAll({ rule: { kind: isGo ? 'expression_switch_statement' : 'switch_statement' } });
-    if (!sw.length) return 0;
-    return sw[0].findAll({ rule: { kind: isGo ? 'expression_case' : 'switch_case' } }).length;
+    // Honor the declared dispatch expression (`on:`): count only switches whose subject matches —
+    // matching the heuristic engine — instead of indexing the FIRST switch in the concatenated
+    // source (which made the metric track whatever switch happened to sort first). Without `on`,
+    // sum over every switch (total dispatch branching), never just sw[0].
+    const subject = (n) => (n.field('value')?.text() ?? '').replace(/^\((.*)\)$/s, '$1').trim();
+    const matching = c.on ? sw.filter((n) => subject(n) === c.on) : sw;
+    let total = 0;
+    for (const s of matching) total += s.findAll({ rule: { kind: isGo ? 'expression_case' : 'switch_case' } }).length;
+    return total;
   }
   throw new Error(`ast-grep: unknown check kind ${c.kind}`);
 }
