@@ -3,7 +3,7 @@
   "version": "0.2.2",
   "type": "module",
   "private": false,
-  "description": "Enforce human-authored architectural invariants as a ratcheted gate on every change — so AI-built codebases don't silently rot (the k10s failure mode). Real-AST (ast-grep) for Go/TS/JS/Python + a heuristic fallback; pre-commit + AI-loop + debt-trend.",
+  "description": "Enforce human-authored architectural invariants as a ratcheted gate on every change \u2014 so AI-built codebases don't silently rot (the k10s failure mode). Real-AST (ast-grep) for Go/TS/JS/Python + a heuristic fallback; pre-commit + AI-loop + debt-trend.",
   "keywords": [
     "architecture",
     "lint",
@@ -35,6 +35,7 @@
     "mutate.mjs",
     "property.mjs",
     "install-hook.sh",
+    "run-tests.mjs",
     "demo-threat-model.mjs",
     "library/",
     "README.md",

@@ -6,6 +6,13 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const tests = readdirSync(HERE).filter((f) => /^test-.*\.mjs$/.test(f)).sort();
+// A published install ships this runner but not the test-*.mjs suites — point at the repo instead
+// of reporting a vacuous 0/0 pass (or, before this file shipped, a MODULE_NOT_FOUND crash).
+if (!tests.length) {
+  console.log('run-tests: no test suites here (the published package does not ship them).');
+  console.log('  Clone https://github.com/johnpatrickwarren-oss/sprag and run `npm install && npm test`.');
+  process.exit(0);
+}
 let failed = 0;
 for (const t of tests) {
   const r = spawnSync('node', [t], { cwd: HERE, encoding: 'utf8' });

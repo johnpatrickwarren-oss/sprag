@@ -232,7 +232,7 @@ malicious patterns were found.
 - [x] **L2** — update suite counts in `README.md`/`EXTRACTING.md`; refresh `library/README.md` table.
 - [x] **L3** — `arch-trend.mjs`: no shell-string interpolation; check archive/tar exit status.
 - [x] **L4** — `detectLang`: add Python; extend `arch init --lang`.
-- [ ] **L5** — ship `run-tests.mjs` (or adjust published `scripts`).
+- [x] **L5** — ship `run-tests.mjs` (or adjust published `scripts`). [shipped runner + graceful no-suites pointer]
 - [ ] **L6** — validate `--threshold` in `mutate.mjs`.
 - [ ] **L7** — extend `time_bomb_tests` to Go/Python test-file conventions (or document the limit).
 
