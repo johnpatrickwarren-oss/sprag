@@ -172,7 +172,6 @@ export function forbidPathRefCount(dir, check, invId) {
 // they belong in a round-aware GATE, not the permanent suite. Deterministic; flags whole files. The
 // signal requires BOTH a git invocation AND a frozen-ref marker (so a product SHA-256 hash test that
 // never touches git is not flagged). check: { dirs:['test'] }. Suppression-aware.
-const TEST_EXTS = ['.test.ts', '.test.tsx', '.test.js', '.test.mjs', '.test.cjs', '.spec.ts', '.spec.js'];
 export function timeBombTestCount(dir, check, invId) {
   if (!dir || !existsSync(dir)) return 0;
   const roots = (check.dirs || ['test']).map((d) => join(dir, d)).filter((p) => existsSync(p));
@@ -187,7 +186,9 @@ export function timeBombTestCount(dir, check, invId) {
       const p = join(d, name);
       const st = statSync(p);
       if (st.isDirectory()) { walk(p); continue; }
-      if (!TEST_EXTS.some((e) => name.endsWith(e)) || isGeneratedFile(p)) continue;
+      // testCovers knows every supported test-naming convention (JS .test./.spec., Go _test.go,
+      // Python test_*.py / _test.py) — was a JS-only suffix list, silently scoring 0 for Go/Python.
+      if (testCovers(name) === null || isGeneratedFile(p)) continue;
       if (tracked && !tracked.has(pathResolve(p))) continue;
       const raw = readFileSync(p, 'utf8');
       if (supRe && supRe.test(raw)) continue;
