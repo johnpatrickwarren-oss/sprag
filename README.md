@@ -71,7 +71,7 @@ npm install                                              # ast-grep engines
 node arch.mjs init <src-dir>                             # scaffold generic invariants + baseline (lang auto-detected)
 node arch.mjs check <src-dir> --invariants arch-invariants.json --baseline-in arch-invariants.baseline.json
 node arch.mjs install-hook <repo-dir> <src-rel> arch-invariants.json   # pre-commit gate (blocks new debt vs HEAD)
-node arch.mjs loop  <src-dir> --fixer "<your builder cmd>"             # AI-loop feedback gate
+node arch.mjs loop  <src-dir> --fixer "<your builder cmd>" --invariants arch-invariants.json  # AI-loop feedback gate
 node arch.mjs trend <repo> <src-rel> --invariants arch-invariants.json # debt trend over history
 ```
 
@@ -122,7 +122,7 @@ The hook computes the baseline from HEAD on each commit (no manual baseline upke
 **AI-loop feedback gate** — runs the gate; on a block, feeds the violation back to a pluggable
 **fixer** and re-checks, until it passes or escalates:
 ```bash
-node arch-loop.mjs <dir> --fixer "<cmd>" [--max-iters 3]
+node arch-loop.mjs <dir> --fixer "<cmd>" [--invariants f] [--max-iters 3]
 node test-arch-loop.mjs                          # proof: converges on a good fixer, escalates on a stuck one
 ```
 The fixer is a stub in tests; in real use it's a claude session (cwd = the code dir, reads
