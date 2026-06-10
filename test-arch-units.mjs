@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  readSource, collectSuppressions, metricValue, computeViolations, parseArgs,
+  readSource, collectSuppressions, metricValue, computeViolations, parseArgs, isBlocking,
 } from './arch-gate.mjs';
 
 let failed = 0;
@@ -75,6 +75,16 @@ const mv = (check, src, dir, extra = {}) => metricValue({ id: 'x', check, ...ext
   // non-ratchet mode must NOT apply the baseline regression rule.
   const noRatchet = [{ id: 'm', mode: 'absolute', max: 5, intent: 'i', severity: 'block', check: {} }];
   eq('non-ratchet mode ignores baseline regressions', computeViolations(noRatchet, { m: 4 }, { m: 3 }).length, 0); }
+
+// ── isBlocking: severity 'warn' reports but does not block; anything else (incl. absent) blocks. ──
+{ const w = [{ id: 'w', mode: 'ratchet', max: 0, intent: 'i', severity: 'warn', check: {} }];
+  const b = [{ id: 'b', mode: 'ratchet', max: 0, intent: 'i', severity: 'block', check: {} }];
+  const n = [{ id: 'n', mode: 'ratchet', max: 0, intent: 'i', check: {} }];
+  eq('warn-only violations do NOT block', isBlocking(computeViolations(w, { w: 1 }, {})), false);
+  eq('block violations DO block', isBlocking(computeViolations(b, { b: 1 }, {})), true);
+  eq('mixed warn+block still blocks', isBlocking(computeViolations([...w, ...b], { w: 1, b: 1 }, {})), true);
+  eq('missing severity defaults to block (fail strict)', isBlocking(computeViolations(n, { n: 1 }, {})), true);
+  eq('no violations -> not blocking', isBlocking([]), false); }
 
 // ── parseArgs: flags map to the right fields; bare arg is the dir. ───────────────────────────────
 { const o = parseArgs(['mydir', '--json', '--invariants', 'inv.json', '--baseline-in', 'b.json']);

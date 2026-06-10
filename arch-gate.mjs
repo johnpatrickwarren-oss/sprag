@@ -183,6 +183,13 @@ export function computeViolations(invariants, metrics, baseline) {
   return violations;
 }
 
+// severity semantics: only 'warn' is non-blocking (reported, exit 0); anything else — 'block' or an
+// absent/unknown severity — blocks (fail strict). This is what makes the meta-ratchet's block->warn
+// downgrade defense meaningful: a downgrade WOULD change gate behavior, so guarding it matters.
+export function isBlocking(violations) {
+  return violations.some((v) => (v.severity || 'block') !== 'warn');
+}
+
 function report(dir, invariants, metrics, baseline, violations, suppressionList) {
   console.log(`arch-gate: ${dir}`);
   for (const inv of invariants) {
@@ -193,9 +200,19 @@ function report(dir, invariants, metrics, baseline, violations, suppressionList)
     console.log('Suppressions (auditable — escape hatch is visible, not silent):');
     for (const s of suppressionList) console.log(`  ~ [${s.id}] line ${s.line}: ${s.reason}`);
   }
+  const warns = violations.filter((v) => (v.severity || 'block') === 'warn');
+  const blocking = violations.filter((v) => (v.severity || 'block') !== 'warn');
+  if (warns.length) {
+    console.log('\nWARNINGS (severity "warn" — reported, not blocking):');
+    for (const vio of warns) {
+      console.log(`  ⚠ [${vio.id}] ${vio.reasons.join('; ')}`);
+      console.log(`      intent: ${vio.intent}`);
+    }
+  }
   if (!violations.length) { console.log('PASS: no architectural-invariant violations.'); return; }
+  if (!blocking.length) { console.log('PASS: no blocking violations (warnings above).'); return; }
   console.log('\nBLOCKED — architectural invariant(s) violated:');
-  for (const vio of violations) {
+  for (const vio of blocking) {
     console.log(`  ✗ [${vio.id}] ${vio.reasons.join('; ')}`);
     console.log(`      intent: ${vio.intent}`);
   }
@@ -226,7 +243,7 @@ function main() {
   const baselinePath = baselineIn || BASELINE_PATH;
   const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {};
   const violations = computeViolations(invariants, metrics, baseline);
-  const blocked = violations.length > 0;
+  const blocked = isBlocking(violations);
 
   if (json) {
     process.stdout.write(JSON.stringify({ dir, metrics, baseline, blocked, violations, suppressions: suppressionList }, null, 2) + '\n');
