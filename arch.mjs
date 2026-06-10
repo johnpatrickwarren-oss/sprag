@@ -9,7 +9,7 @@
 //   arch scan   <dir> [--name N]                                  survey God code (oversized files / functions / hubs)
 //   arch mutate <dir> --test "<cmd>" [--since ref] [--all]         OPT-IN incremental mutation testing (test efficacy; out-of-band)
 //   arch property <dir> --prop "<cmd>" [--target d] [--min-kill N]  accept a property iff it HOLDS + CATCHES BUGS (the behavioral rung)
-//   arch init   <dir> [--lang go|ts|js] [--out f]                   scaffold generic invariants + baseline
+//   arch init   <dir> [--lang go|ts|js|py] [--out f]                scaffold generic invariants + baseline
 import { spawnSync } from 'node:child_process';
 import { readdirSync, writeFileSync, readFileSync, statSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -19,8 +19,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const run = (cmd, args) => process.exit(spawnSync(cmd, args, { stdio: 'inherit' }).status ?? 1);
 
 export function detectLang(dir) {
-  const count = { go: 0, ts: 0, js: 0 };
-  const ext = { '.go': 'go', '.ts': 'ts', '.tsx': 'ts', '.js': 'js', '.mjs': 'js', '.cjs': 'js', '.jsx': 'js' };
+  const count = { go: 0, ts: 0, js: 0, py: 0 };
+  const ext = { '.go': 'go', '.ts': 'ts', '.tsx': 'ts', '.js': 'js', '.mjs': 'js', '.cjs': 'js', '.jsx': 'js', '.py': 'py' };
   const walk = (d) => { for (const n of readdirSync(d)) { if (n === 'node_modules' || n === '.git' || n === 'vendor') continue; const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else { const e = '.' + n.split('.').pop(); if (ext[e]) count[ext[e]]++; } } };
   if (existsSync(dir)) walk(dir);
   return Object.entries(count).sort((a, b) => b[1] - a[1])[0][0];
@@ -40,16 +40,17 @@ export function firstPositional(argv, valueFlags) {
 // `arch init`: scaffold a starting invariant set (generic, no-tuning checks) + a baseline.
 export function init(argv) {
   const dir = firstPositional(argv, new Set(['--lang', '--out']));
-  if (!dir) { console.error('usage: arch init <dir> [--lang go|ts|js] [--out f]'); process.exit(64); }
+  if (!dir) { console.error('usage: arch init <dir> [--lang go|ts|js|py] [--out f]'); process.exit(64); }
   const li = argv.indexOf('--lang'); const lang = li >= 0 ? argv[li + 1] : detectLang(dir);
   const oi = argv.indexOf('--out'); const out = oi >= 0 ? argv[oi + 1] : join(dir, 'arch-invariants.json');
-  const astLangs = { ts: 'ts', js: 'js', go: 'go' };
+  const astLangs = { ts: 'ts', js: 'js', go: 'go', py: 'py', python: 'py' };
   const invs = [
     { id: 'no-god-files', intent: 'No source file over 800 lines (God file) — split it.', check: { kind: 'oversized_files', maxLines: 800 }, mode: 'ratchet', severity: 'block' },
     { id: 'no-complex-functions', intent: 'PRIMARY function-health gate: no function with cyclomatic complexity over 12 (1 + decision points + &&/||) — the less-arbitrary signal than length, flagging BRANCHY hard-to-test functions, not merely long ones (McCabe/NIST anchor ~10; 12 is a forgiving starter). Pairs with the no-god-functions length backstop below for the long-but-flat case.', check: { kind: 'max_complexity', maxComplexity: 12 }, mode: 'ratchet', severity: 'block', lang: astLangs[lang] || 'ts', engine: 'ast-grep' },
     { id: 'no-god-functions', intent: 'Coarse BACKSTOP: no function over 150 lines. Complexity (above) is the primary gate; this only catches the huge-but-flat functions complexity misses — giant data tables, long sequential builders/pipelines with few branches. Set high on purpose so it does not fight the complexity gate by flagging clean ~100-line functions.', check: { kind: 'max_function_lines', maxLines: 150 }, mode: 'ratchet', severity: 'block', lang: astLangs[lang] || 'ts', engine: 'ast-grep' },
   ];
-  if (lang !== 'go') invs.push({ id: 'no-god-module', intent: 'No module imported by more than 8 files (coupling hub / God module).', check: { kind: 'module_fanin', maxFanin: 8 }, mode: 'ratchet', severity: 'block' });
+  // module_fanin is JS/TS-relative-import based — meaningless (always 0) for Go and Python.
+  if (lang !== 'go' && lang !== 'py' && lang !== 'python') invs.push({ id: 'no-god-module', intent: 'No module imported by more than 8 files (coupling hub / God module).', check: { kind: 'module_fanin', maxFanin: 8 }, mode: 'ratchet', severity: 'block' });
   // TDD shadow + no-rotting-tests (ratchet: grandfather today's untested/legacy, block new).
   invs.push({ id: 'require-tests', intent: 'Every source module ships with a test (the durable half of TDD). Ratchet grandfathers existing untested files; blocks NEW ones.', check: { kind: 'require_tests', dirs: ['.'] }, mode: 'ratchet', severity: 'block' });
   invs.push({ id: 'no-time-bomb-tests', intent: 'No test pinned to a frozen git ref/SHA — round-scoped checks belong in a gate, not the permanent suite.', check: { kind: 'time_bomb_tests', dirs: ['.'] }, max: 0, mode: 'ratchet', severity: 'block' });

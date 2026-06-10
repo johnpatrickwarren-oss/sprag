@@ -23,7 +23,9 @@ const files = (d, n, ext) => { for (let i = 0; i < n; i++) mk(d, `f${i}${ext}`);
 { const d = tmp(); files(d, 3, '.go'); files(d, 1, '.ts');
   eq('detectLang: a mostly-Go dir is go', detectLang(d), 'go');
   const j = tmp(); files(j, 3, '.mjs'); files(j, 1, '.ts');
-  eq('detectLang: a mostly-.mjs dir is js', detectLang(j), 'js'); }
+  eq('detectLang: a mostly-.mjs dir is js', detectLang(j), 'js');
+  const p = tmp(); files(p, 3, '.py');
+  eq('detectLang: a pure-Python dir is py (not the go fallback)', detectLang(p), 'py'); }
 
 // ── detectLang skip-list: node_modules / .git / vendor must NOT be counted ────────
 // Top level is dominantly .ts (so the answer is 'ts'); each skipped dir is stuffed with a DIFFERENT
@@ -54,6 +56,10 @@ const runInit = (lang) => {
 { const { by } = runInit('ts');
   eq('init --lang ts: god-functions invariant carries lang ts', by('no-god-functions')?.lang, 'ts');
   ok('init --lang ts: DOES add the module-fanin invariant (non-Go path)', by('no-god-module') !== undefined, 'expected no-god-module present'); }
+{ const { r, by } = runInit('py');
+  ok('init --lang py: exits 0', r.status === 0, `exit ${r.status}: ${r.stderr}`);
+  eq('init --lang py: god-functions invariant carries lang py (real Python AST)', by('no-god-functions')?.lang, 'py');
+  ok('init --lang py: no module-fanin invariant (JS/TS-import-based check skipped)', by('no-god-module') === undefined, JSON.stringify(by('no-god-module'))); }
 
 console.log(failed === 0 ? '\nPASS: CLI language detection + init scaffolder asserted (arch.mjs) ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
