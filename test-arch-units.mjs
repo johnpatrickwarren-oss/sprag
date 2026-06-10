@@ -64,7 +64,14 @@ const mv = (check, src, dir, extra = {}) => metricValue({ id: 'x', check, ...ext
 // ── oversized_files: file at maxLines OK, over is counted. ───────────────────────────────────────
 { const d = tmp();
   write(d, 'small.ts', 'a\n'.repeat(10)); write(d, 'big.ts', 'a\n'.repeat(40));
-  eq('one file over the line limit is flagged, the small one is not', mv({ kind: 'oversized_files', maxLines: 20 }, '', d), 1); }
+  eq('one file over the line limit is flagged, the small one is not', mv({ kind: 'oversized_files', maxLines: 20 }, '', d), 1);
+  // boundary: a newline-TERMINATED file of exactly maxLines lines is at the limit, not over it
+  // (split('\n') counts the trailing newline as a phantom extra line).
+  const d2 = tmp();
+  write(d2, 'exact.ts', 'a\n'.repeat(10));
+  eq('file with exactly maxLines lines (trailing newline) is NOT over', mv({ kind: 'oversized_files', maxLines: 10 }, '', d2), 0);
+  write(d2, 'eleven.ts', 'a\n'.repeat(11));
+  eq('file one line over maxLines IS over', mv({ kind: 'oversized_files', maxLines: 10 }, '', d2), 1); }
 
 // ── computeViolations: absolute max + ratchet boundaries (the core gate decision). ───────────────
 { const inv = [{ id: 'm', mode: 'ratchet', max: 5, intent: 'i', severity: 'block', check: {} }];
