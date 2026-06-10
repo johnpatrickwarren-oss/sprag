@@ -36,5 +36,28 @@ writeFileSync(join(repo, 'src', 'ui.go'), CLEAN + '\n// touched, no architectura
 r = sh('git add -A && git commit -q -m clean-change', repo);
 expect('clean change ALLOWED', r.status === 0, `exit ${r.status}: ${r.stdout}${r.stderr}`);
 
+// 4. M1: STAGE-THEN-REVERT — stage the rot, restore the working copy, commit. The hook must gate
+//    the INDEX (what actually lands), so the rot commit is still BLOCKED. Gating the working tree
+//    would see clean code and let the staged rot land.
+writeFileSync(join(repo, 'src', 'ui.go'), CLEAN.replace('\tquitting bool\n', '\tquitting bool\n\tselected int\n'));
+sh('git add -A', repo);
+writeFileSync(join(repo, 'src', 'ui.go'), CLEAN + '\n// touched, no architectural change\n'); // working copy back to clean (matches HEAD content)
+r = sh('git commit -q -m sneak', repo);
+const out4 = r.stdout + r.stderr;
+expect('stage-then-revert rot BLOCKED (hook gates the index, not the working tree)',
+  r.status !== 0 && /model-not-god-object/.test(out4), `exit ${r.status}: ${out4}`);
+expect('staged rot did NOT land (still 2 commits)',
+  sh('git log --oneline', repo).stdout.trim().split('\n').filter(Boolean).length === 2, 'rot landed');
+sh('git reset -q && git checkout -q -- src', repo); // clean up index + working tree
+
+// 5. M1 inverse: clean STAGED content + dirty (rotted) WORKING TREE must commit fine — the dirt
+//    isn't being committed.
+writeFileSync(join(repo, 'src', 'ui.go'), CLEAN + '\n// clean staged change\n');
+sh('git add -A', repo);
+writeFileSync(join(repo, 'src', 'ui.go'), CLEAN.replace('\tquitting bool\n', '\tquitting bool\n\tselected int\n')); // unstaged rot
+r = sh('git commit -q -m clean-staged', repo);
+expect('clean staged commit ALLOWED despite a dirty working tree', r.status === 0, `exit ${r.status}: ${r.stdout}${r.stderr}`);
+sh('git checkout -q -- src', repo);
+
 console.log(failed === 0 ? '\nPASS: pre-commit gate blocks rot, lets clean code through ✅' : `\nFAIL: ${failed} case(s)`);
 process.exit(failed ? 1 : 0);
