@@ -3,7 +3,7 @@
 // *executes* the code but asserts nothing — coverage theater, the exact Anchor "2x tests, no better"
 // trap — lets every mutant SURVIVE (BLOCKED), even though it's a passing test with full line coverage.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -69,6 +69,26 @@ const mutate = (d, extra = []) => {
   git('add', '-A'); git('commit', '-qm', 'init');
   const r = spawnSync('node', [MUT, d, '--test', 'true', '--since', 'no-such-ref', '--cwd', d], { encoding: 'utf8' });
   expect('--since with an unresolvable ref fails loudly (exit 64), not a silent pass', r.status === 64 && /failed/.test(r.stdout + r.stderr), `exit ${r.status}: ${r.stdout}${r.stderr}`); }
+
+// 5. Dir scoping is PATH-CORRECT: (a) scoping to <repo>/src must NOT leak sibling dirs that share
+//    the raw string prefix (src-other/); (b) a symlinked invocation path (macOS tmpdir lives under
+//    the /var -> /private/var symlink, while git rev-parse realpaths) must still match — not silently
+//    report "nothing to mutate" and exit 0 (a no-op gate).
+{ const d = mkdtempSync(join(tmpdir(), 'arch-mut-scope-')); // un-realpathed (symlinked on macOS)
+  const git = (...a) => spawnSync('git', a, { cwd: d });
+  mkdirSync(join(d, 'src')); mkdirSync(join(d, 'src-other'));
+  writeFileSync(join(d, 'src', 'a.mjs'), 'export const a = (x, y) => x >= y;\n');
+  writeFileSync(join(d, 'src-other', 'b.mjs'), 'export const b = (x, y) => x && y;\n');
+  git('init', '-q'); git('config', 'user.email', 't@t'); git('config', 'user.name', 't');
+  git('add', '-A'); git('commit', '-qm', 'init');
+  writeFileSync(join(d, 'src', 'a.mjs'), 'export const a = (x, y) => x >= y && x !== 0;\n');
+  writeFileSync(join(d, 'src-other', 'b.mjs'), 'export const b = (x, y) => x && y && x !== 0;\n');
+  const r = spawnSync('node', [MUT, join(d, 'src'), '--since', 'HEAD', '--test', 'true', '--cwd', d], { encoding: 'utf8' });
+  const out = r.stdout + r.stderr;
+  expect('dir scope through a symlinked path still finds the changed files (no silent no-op)',
+    !/no changed source files/.test(out) && /across 1 file\(s\)/.test(out), `exit ${r.status}: ${out}`);
+  expect('dir scope does NOT leak the sibling src-other/ (separator-boundary match)',
+    !/src-other/.test(out), `exit ${r.status}: ${out}`); }
 
 console.log(failed === 0 ? '\nPASS: mutation testing gates on EFFICACY — kills-bugs, not test count/coverage ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
