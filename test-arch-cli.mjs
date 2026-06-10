@@ -61,5 +61,13 @@ const runInit = (lang) => {
   eq('init --lang py: god-functions invariant carries lang py (real Python AST)', by('no-god-functions')?.lang, 'py');
   ok('init --lang py: no module-fanin invariant (JS/TS-import-based check skipped)', by('no-god-module') === undefined, JSON.stringify(by('no-god-module'))); }
 
+// ── run-tests.mjs in a dir with NO test suites (the published-install layout, which ships the
+// runner but not the test-*.mjs files): a clear pointer, not a MODULE_NOT_FOUND crash. ───────────
+{ const d = tmp();
+  writeFileSync(join(d, 'run-tests.mjs'), readFileSync(join(HERE, 'run-tests.mjs'), 'utf8'));
+  const r = spawnSync('node', [join(d, 'run-tests.mjs')], { encoding: 'utf8' });
+  ok('run-tests with no suites prints a pointer and exits 0 (published install)',
+    r.status === 0 && /no test suites|repo/i.test(r.stdout + r.stderr), `exit ${r.status}: ${r.stdout}${r.stderr}`); }
+
 console.log(failed === 0 ? '\nPASS: CLI language detection + init scaffolder asserted (arch.mjs) ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
