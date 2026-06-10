@@ -4,7 +4,7 @@
 //   arch check  <dir> [--invariants f] [--baseline-in f] [--json]   gate a dir (exit 0 pass / 3 blocked)
 //   arch baseline <dir> [--invariants f] [--baseline-out f]         record the accepted baseline
 //   arch trend  <repo> <src> [--invariants f] [--last N]            architectural-debt trend over history
-//   arch loop   <dir> --fixer "<cmd>" [--max-iters N]               AI-loop: gate -> fix -> re-gate
+//   arch loop   <dir> --fixer "<cmd>" [--invariants f] [--max-iters N]  AI-loop: gate -> fix -> re-gate
 //   arch install-hook <repo> <src> [invariants]                     install the pre-commit gate
 //   arch scan   <dir> [--name N]                                  survey God code (oversized files / functions / hubs)
 //   arch mutate <dir> --test "<cmd>" [--since ref] [--all]         OPT-IN incremental mutation testing (test efficacy; out-of-band)
