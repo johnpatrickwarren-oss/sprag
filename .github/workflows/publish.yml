@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      - run: npm ci || npm install
+      - run: npm ci
       - run: npm test          # don't ship a broken gate
       - name: Publish if the version is new
         run: |
