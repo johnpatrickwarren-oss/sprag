@@ -90,6 +90,13 @@ const mutate = (d, extra = []) => {
   expect('dir scope does NOT leak the sibling src-other/ (separator-boundary match)',
     !/src-other/.test(out), `exit ${r.status}: ${out}`); }
 
+// 5b. --threshold <garbage> must be a usage error (exit 64), not a silently-disabled gate
+//     (score < NaN is always false, so any score would "pass").
+{ const d = mk('test\n');
+  const r = spawnSync('node', [MUT, d, '--test', 'true', '--all', '--cwd', d, '--threshold', 'banana'], { encoding: 'utf8' });
+  expect('--threshold garbage -> usage error (exit 64), not a silent pass',
+    r.status === 64 && /threshold/i.test(r.stdout + r.stderr), `exit ${r.status}: ${r.stdout}${r.stderr}`); }
+
 // 6. options BEFORE the dir: `--since HEAD <dir>` must not take the flag VALUE ('HEAD') as the dir.
 { const d = mkdtempSync(join(tmpdir(), 'arch-mut-optfirst-'));
   writeFileSync(join(d, 'm.mjs'), MOD);
