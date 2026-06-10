@@ -61,6 +61,13 @@ export function isSkippedDir(name) {
   return SKIP_DIRS.has(name) || name.endsWith('.egg-info');
 }
 
+// Line count without the trailing-newline phantom: split('\n') on a newline-TERMINATED file counts
+// one extra "line", so a file of exactly maxLines lines would false-flag. (Ratchet baselines
+// self-correct — both sides use this same counter.)
+export function lineCount(src) {
+  return src.split('\n').length - (src.endsWith('\n') ? 1 : 0);
+}
+
 // oversized_files (generic, language-agnostic, no per-project tuning): count source files whose
 // line count exceeds maxLines — the "God file" smell. Recurses, skipping deps/vcs/generated.
 const SRC_EXTS = ['.go', '.ts', '.tsx', '.js', '.mjs', '.jsx', '.py', '.rs', '.java', '.rb', '.sh'];
@@ -76,7 +83,7 @@ export function oversizedFilesCount(dir, maxLines) {
       if (st.isDirectory()) { walk(p); continue; }
       if (!SRC_EXTS.some((e) => name.endsWith(e)) || isGeneratedFile(p)) continue;
       if (tracked && !tracked.has(pathResolve(p))) continue;
-      if (readFileSync(p, 'utf8').split('\n').length > maxLines) n++;
+      if (lineCount(readFileSync(p, 'utf8')) > maxLines) n++;
     }
   };
   walk(dir);

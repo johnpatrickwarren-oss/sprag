@@ -6,7 +6,7 @@ import { parse, registerDynamicLanguage } from '@ast-grep/napi';
 import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative, dirname, resolve as rsv } from 'node:path';
 import { createRequire } from 'node:module';
-import { gitTrackedSet } from './metrics.mjs';
+import { gitTrackedSet, lineCount } from './metrics.mjs';
 const require = createRequire(import.meta.url);
 
 // generated/bundled code (not hand-written) — exclude so counts reflect real source.
@@ -54,7 +54,7 @@ const langOf = (f) => (f.endsWith('.go') ? 'go' : f.endsWith('.py') ? 'python' :
 
 for (const f of files) {
   const src = readFileSync(f, 'utf8');
-  const lines = src.split('\n').length;
+  const lines = lineCount(src);
   if (lines > FILE) godFiles.push({ f: relative(dir, f), lines });
   // God functions: real AST for JS/TS, Go, AND Python (was JS/TS-only -> silently 0 for py/go).
   const lang = langOf(f);
