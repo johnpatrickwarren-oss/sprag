@@ -102,6 +102,10 @@ codebase and **blocks** on (a) an absolute `max` breach or (b) a `ratchet` regre
 | `no-positional-rows` | magic integer-index access (`ra[3]`) count (max 0) | positional fragility (4) |
 | `bounded-dispatch` | `switch m.view` case count (ratchet) | central per-view dispatch (2) |
 
+Per-invariant `severity` defaults to `"block"`; `severity: "warn"` reports the violation without
+blocking (exit 0) — and the meta-ratchet still blocks a silent `block → warn` downgrade, so warn is
+an authored choice, never an agent's escape hatch.
+
 The **ratchet is the key idea**: it blocks the *13th* Model field, not the 30th — catching the
 *trend* as it's introduced, which is what would have flagged k10s at commit ~20 instead of at
 collapse (commit 234). Demo: adding one `Model` field is blocked at 6→7, *before* the absolute max.

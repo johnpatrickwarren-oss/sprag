@@ -75,6 +75,24 @@ spawnSync('node', [GATE, SAMPLE, '--baseline'], { encoding: 'utf8' });
     r.code === 3 && /✗ \[scope-boundary\]/.test(r.out) && !/✗ \[bounded-dispatch\]/.test(r.out), `exit ${r.code}: ${r.out}`);
 }
 
+// 6. severity: "warn" — the violation is REPORTED but does not block (exit 0); severity "block"
+//    (and absent severity) still blocks. Before this, `warn` was decorative and blocked identically.
+{
+  const d = mkdtempSync(join(tmpdir(), 'arch-warn-'));
+  writeFileSync(join(d, 'app.go'), 'package main\n\nfunc f(xs []int) int {\n\treturn xs[3]\n}\n');
+  const inv = join(d, 'inv.json');
+  const mkInv = (severity) => writeFileSync(inv, JSON.stringify([{ id: 'no-magic-index', intent: 'x', check: { kind: 'magic_index_count' }, max: 0, mode: 'ratchet', severity }]));
+  mkInv('warn');
+  const w = spawnSync('node', [GATE, d, '--invariants', inv], { encoding: 'utf8' });
+  expect('severity "warn" violation is reported but does NOT block (exit 0)',
+    w.status === 0 && /no-magic-index/.test(w.stdout) && /warn/i.test(w.stdout),
+    `exit ${w.status}: ${w.stdout}${w.stderr}`);
+  mkInv('block');
+  const b = spawnSync('node', [GATE, d, '--invariants', inv], { encoding: 'utf8' });
+  expect('same violation with severity "block" still blocks (exit 3)',
+    b.status === 3 && /✗ \[no-magic-index\]/.test(b.stdout), `exit ${b.status}: ${b.stdout}${b.stderr}`);
+}
+
 console.log(failed === 0
   ? '\nPASS: gate passes clean code and blocks all 4 k10s-style rot diffs ✅'
   : `\nFAIL: ${failed} case(s) did not behave as expected`);

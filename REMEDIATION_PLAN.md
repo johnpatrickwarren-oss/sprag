@@ -227,7 +227,7 @@ malicious patterns were found.
 - [x] **M1** — `install-hook.sh`: gate the staged index (`git checkout-index --prefix`) instead of the working tree; add stage-then-revert test.
 - [x] **M2** — commit `package-lock.json`, un-ignore it, drop `|| npm install` from the three workflows (makes the dogfooded `no-unlocked-deps` check real).
 - [x] **M3** — fix positional-arg parsing in `arch.mjs init`, `mutate.mjs`, `property.mjs` (skip flag values).
-- [ ] **M4** — implement or remove `severity: "warn"` semantics; align THREAT-MODEL/README wording.
+- [x] **M4** — implement or remove `severity: "warn"` semantics; align THREAT-MODEL/README wording. [implemented: warn reports without blocking]
 - [ ] **L1** — fix trailing-newline off-by-one in line counting (`metrics.mjs`, `scan.mjs`).
 - [ ] **L2** — update suite counts in `README.md`/`EXTRACTING.md`; refresh `library/README.md` table.
 - [ ] **L3** — `arch-trend.mjs`: no shell-string interpolation; check archive/tar exit status.
