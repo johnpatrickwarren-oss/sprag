@@ -51,5 +51,23 @@ spawnSync('node', [GATE, SAMPLE, '--invariants', INV, '--baseline', '--baseline-
   expect('TS rot: out-of-scope capability  BLOCKED on scope-boundary (count unchanged)',
     r.code === 3 && /✗ \[scope-boundary\]/.test(r.out) && !/✗ \[bounded-dispatch\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
 
+// H2 regression pair: switch_case_count must honor `on: m.view`, not just count the FIRST switch
+// in the (alphabetically) concatenated source. A decoy file sorting before ui.ts holds an unrelated
+// 6-case `switch (k)`.
+const DECOY = 'export function decoy(k: number): void {\n  switch (k) {\n    case 1: break;\n    case 2: break;\n    case 3: break;\n    case 4: break;\n    case 5: break;\n    case 6: break;\n  }\n}\n';
+{ // (a) the unrelated switch must not be counted -> no false block
+  const d = tsWith(CLEAN); writeFileSync(join(d, 'aa-decoy.ts'), DECOY);
+  const r = gate(d);
+  expect('TS: unrelated 6-case switch (sorted first) does NOT false-block bounded-dispatch (on: m.view)',
+    r.code === 0 && /PASS/.test(r.out), `exit ${r.code}: ${r.out}`); }
+{ // (b) growth of the DECLARED m.view dispatch is still caught with the decoy present (a duplicate
+  // in-scope "pods" case grows the dispatch without tripping scope-boundary)
+  const go = CLEAN.replace('    case "nodes":\n      m.views["nodes"] = m.views["nodes"].update(msg);\n      break;\n',
+    '    case "nodes":\n      m.views["nodes"] = m.views["nodes"].update(msg);\n      break;\n    case "pods":\n      m.views["pods"] = m.views["pods"].update(msg);\n      break;\n');
+  const d = tsWith(go); writeFileSync(join(d, 'aa-decoy.ts'), DECOY);
+  const r = gate(d);
+  expect('TS: +m.view dispatch case BLOCKED even with an unrelated switch sorted first',
+    r.code === 3 && /✗ \[bounded-dispatch\]/.test(r.out), `exit ${r.code}: ${r.out}`); }
+
 console.log(failed === 0 ? '\nPASS: real-AST (ast-grep) gate enforces the tenets on TypeScript too ✅' : `\nFAIL: ${failed} case(s)`);
 process.exit(failed ? 1 : 0);

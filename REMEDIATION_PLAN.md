@@ -221,7 +221,7 @@ malicious patterns were found.
 
 - [x] **C1** — `arch-loop.mjs`: treat any gate exit other than 0/3 as a hard error (fail closed); add a dead-engine loop test.
 - [x] **H1** — `arch-loop.mjs`: support `--invariants` (and forward it); fix README loop examples; cover in `test-arch-loop.mjs`.
-- [ ] **H2** — `ast-engine.mjs`: make `switch_case_count` honor `check.on` and stop indexing `sw[0]`; add multi-switch fixtures.
+- [x] **H2** — `ast-engine.mjs`: make `switch_case_count` honor `check.on` and stop indexing `sw[0]`; add multi-switch fixtures.
 - [ ] **H3** — `mutate.mjs`: dir scope must match on a path-separator boundary (`dirAbs + '/'`).
 - [ ] **H4** — `mutate.mjs`: realpath `dir`/`repoRoot` before comparison; warn when scope filters out a non-empty diff.
 - [ ] **M1** — `install-hook.sh`: gate the staged index (`git checkout-index --prefix`) instead of the working tree; add stage-then-revert test.
