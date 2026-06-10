@@ -230,7 +230,7 @@ malicious patterns were found.
 - [x] **M4** — implement or remove `severity: "warn"` semantics; align THREAT-MODEL/README wording. [implemented: warn reports without blocking]
 - [x] **L1** — fix trailing-newline off-by-one in line counting (`metrics.mjs`, `scan.mjs`).
 - [x] **L2** — update suite counts in `README.md`/`EXTRACTING.md`; refresh `library/README.md` table.
-- [ ] **L3** — `arch-trend.mjs`: no shell-string interpolation; check archive/tar exit status.
+- [x] **L3** — `arch-trend.mjs`: no shell-string interpolation; check archive/tar exit status.
 - [ ] **L4** — `detectLang`: add Python; extend `arch init --lang`.
 - [ ] **L5** — ship `run-tests.mjs` (or adjust published `scripts`).
 - [ ] **L6** — validate `--threshold` in `mutate.mjs`.

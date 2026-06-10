@@ -39,7 +39,13 @@ const rows = [];
 for (const sha of shas) {
   const tmp = mkdtempSync(join(tmpdir(), 'arch-trend-'));
   try {
-    spawnSync('bash', ['-c', `git -C "${repo}" archive ${sha} | tar -x -C "${tmp}"`]);
+    // No shell-string interpolation (a repo path holding a quote/backtick/$( would be injected and
+    // silently break), and CHECK both exit statuses — a failed extraction must be loud, not an empty
+    // tree that scores every metric 0 for that commit row.
+    const ar = spawnSync('git', ['-C', repo, 'archive', sha], { maxBuffer: 1024 * 1024 * 1024 });
+    if (ar.status !== 0) { console.error(`arch-trend: 'git archive ${sha}' failed (exit ${ar.status}): ${String(ar.stderr).trim()}`); process.exit(1); }
+    const tx = spawnSync('tar', ['-x', '-C', tmp], { input: ar.stdout });
+    if (tx.status !== 0) { console.error(`arch-trend: extracting ${sha} failed (tar exit ${tx.status}): ${String(tx.stderr).trim()}`); process.exit(1); }
     const srcDir = join(tmp, srcRel);
     const subj = spawnSync('git', ['-C', repo, 'log', '-1', '--format=%s', sha], { encoding: 'utf8' }).stdout.trim();
     const metrics = {};
