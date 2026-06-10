@@ -233,7 +233,7 @@ malicious patterns were found.
 - [x] **L3** — `arch-trend.mjs`: no shell-string interpolation; check archive/tar exit status.
 - [x] **L4** — `detectLang`: add Python; extend `arch init --lang`.
 - [x] **L5** — ship `run-tests.mjs` (or adjust published `scripts`). [shipped runner + graceful no-suites pointer]
-- [ ] **L6** — validate `--threshold` in `mutate.mjs`.
+- [x] **L6** — validate `--threshold` in `mutate.mjs`.
 - [ ] **L7** — extend `time_bomb_tests` to Go/Python test-file conventions (or document the limit).
 
 ## Test-suite results

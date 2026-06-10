@@ -31,6 +31,10 @@ const TEST = opt('--test');
 if (!dir || !TEST) { console.error('usage: arch mutate <dir> --test "<cmd>" [--since <ref>] [--all] [--threshold 60] [--max-mutants 200] [--cwd <d>] [--exclude <globs>]'); process.exit(64); }
 const threshold = parseFloat(opt('--threshold', '60'));
 const maxMutants = parseInt(opt('--max-mutants', '200'), 10);
+// Validate numerics LOUDLY: `score < NaN` is always false, so a garbage --threshold would silently
+// disable the gate (every score "passes") — the no-op-gate failure mode again.
+if (!Number.isFinite(threshold)) { console.error(`mutate: --threshold must be a number (got '${opt('--threshold', '60')}')`); process.exit(64); }
+if (!Number.isFinite(maxMutants) || maxMutants <= 0) { console.error(`mutate: --max-mutants must be a positive integer (got '${opt('--max-mutants', '200')}')`); process.exit(64); }
 const gitTop = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
 const repoRoot = gitTop.status === 0 ? gitTop.stdout.trim() : dir;
 const cwd = opt('--cwd', repoRoot);
