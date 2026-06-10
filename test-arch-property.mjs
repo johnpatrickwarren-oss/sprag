@@ -51,5 +51,10 @@ const run = (cmd) => { const r = spawnSync('node', [PROP, d, '--prop', cmd, '--t
 { const r = spawnSync('node', [PROP, '/tmp'], { encoding: 'utf8' });
   expect('missing --prop -> usage error (exit 64)', r.status === 64, `exit ${r.status}`); }
 
+// options BEFORE the dir: `--prop "<cmd>" <dir>` must not take the flag VALUE as the dir
+{ const r = spawnSync('node', [PROP, '--prop', strong, d, '--target', join(d, 'src'), '--min-kill', '50', '--all'], { encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  expect('property with options before <dir> still ACCEPTS the strong property', r.status === 0 && /ACCEPT/.test(out), `exit ${r.status}: ${out}`); }
+
 console.log(failed === 0 ? '\nPASS: arch property accepts strong invariants, rejects weak/tautological + non-holding, warns on restatement ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);

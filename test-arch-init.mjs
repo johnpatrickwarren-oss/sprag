@@ -15,5 +15,11 @@ expect('init wrote invariants', existsSync(join(d, 'src', 'arch-invariants.json'
 expect('init wrote baseline', existsSync(join(d, 'src', 'arch-invariants.baseline.json')), 'no baseline file');
 const chk = spawnSync('node', [ARCH, 'check', join(d, 'src'), '--invariants', join(d, 'src', 'arch-invariants.json'), '--baseline-in', join(d, 'src', 'arch-invariants.baseline.json')], { encoding: 'utf8' });
 expect('arch check passes the scaffolded project', chk.status === 0 && /PASS/.test(chk.stdout), `exit ${chk.status}: ${chk.stdout}`);
+// options BEFORE the dir: `init --lang ts <dir>` must not take the flag VALUE (`ts`) as the dir
+const d2 = mkdtempSync(join(tmpdir(), 'arch-init2-')); mkdirSync(join(d2, 'src'));
+writeFileSync(join(d2, 'src', 'a.ts'), 'export class M { a = 0; }\nexport const f = () => 1;\n');
+const init2 = spawnSync('node', [ARCH, 'init', '--lang', 'ts', join(d2, 'src')], { encoding: 'utf8' });
+expect('arch init with options before <dir> exits 0', init2.status === 0, init2.stdout + init2.stderr);
+expect('option-first init wrote invariants in the right dir', existsSync(join(d2, 'src', 'arch-invariants.json')), 'no invariants file');
 console.log(failed === 0 ? '\nPASS: arch init scaffolds invariants + baseline; check passes ✅' : `\nFAIL: ${failed}`);
 process.exit(failed ? 1 : 0);
