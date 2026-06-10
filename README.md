@@ -307,7 +307,7 @@ Test files are auto-skipped when they use the `.test.`/`.spec.` convention; use 
 
 ## Tests
 
-**`npm test` → 14 self-contained suites**, covering: gate+ratchet+scope, pre-commit hook, AI-loop
+**`npm test` runs every `test-*.mjs` suite** (36 at the time of writing), covering: gate+ratchet+scope, pre-commit hook, AI-loop
 (converge/escalate), debt-trend, the generic God-file/God-function/fan-in checks, the custom
 `ast_grep_rule` DSL, `init` scaffolding, real-AST on TypeScript / Go (incl. goroutine-mutation) /
 Python, scope-dirs, and a **dogfood** suite that runs the gate on its own source (the tool has no God

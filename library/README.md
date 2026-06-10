@@ -1,8 +1,10 @@
 # Starter tenet library
 
-Ready-to-enable architectural invariants: the **5 structural tenets** from the k10s post ("I'm Going
-Back to Writing Code by Hand"), **2 layering/test-rot invariants** (L1–L2), **1 discipline-derived
-check** (D1), and **1 quality-metric check** (Q1) — learned from adopting this gate on real repos + the
+Ready-to-enable architectural invariants — **18 in the catalog**: the **5 structural tenets** from the
+k10s post ("I'm Going Back to Writing Code by Hand"), **2 layering/test-rot invariants** (L1–L2),
+**2 discipline-derived checks** (D1–D2), **1 quality-metric check** (Q1), the **supply-chain pair**
+(S1–S2), **type-strictness** (TS1–TS3), **secrets** (SEC1), the **meta-ratchet** (M1), and the
+**behavioral golden-output check** (B1) — learned from adopting this gate on real repos + the
 behavioral disciplines it pairs with (those live in [Anchor](https://github.com/johnpatrickwarren-oss/anchor),
 not here). `tenets.json` is the catalog; copy the entries you want into your
 project's `invariants.json` and **tune** them (the human still owns the architecture — the gate only enforces it).
@@ -17,11 +19,22 @@ project's `invariants.json` and **tune** them (the human still owns the architec
 | L1 — layering: product mustn't depend on process/working-state | `product-not-read-process` | `forbid_path` | **ready** |
 | L2 — no time-bomb tests (tests that can only rot) | `no-time-bomb-tests` | `time_bomb_tests` | **ready** |
 | D1 — test coverage floor (the TDD shadow) | `require-tests` | `require_tests` | **ready** |
+| D2 — required project artifacts exist (durable trail) | `require-project-trail` | `require_paths` | **ready** |
 | Q1 — bounded function complexity (principled god-function) | `no-complex-functions` | `max_complexity` | **ready** |
+| S1 — dependency surface can't silently grow | `dependency-surface` | `dependency_count` (ratchet) | **ready** |
+| S2 — no hallucinated / unlocked deps (slopsquat guard) | `no-unlocked-deps` | `unlocked_dependencies` | **ready** |
+| TS1 — no new `any` | `no-new-any` | `ast_grep_tree` | **ready** |
+| TS2 — no non-null assertions (`x!`) | `no-non-null-assertion` | `ast_grep_tree` | **ready** |
+| TS3 — no `@ts-ignore` / `@ts-nocheck` | `no-ts-ignore` | `ast_grep_tree` | **ready** |
+| SEC1 — no committed secrets | `no-committed-secrets` | `secret_scan` | **ready** |
+| M1 — no silent config relaxation (the meta-ratchet) | `no-config-relaxation` | `config_relaxations` | **ready** |
+| B1 — behavior unchanged (golden outputs; opt-in / out-of-band) | `behavior-unchanged` | `golden_outputs` | **ready** |
 
 T1–T5 catch **structural** decay (size, coupling, dispatch, mutation, scope). L1–L2 catch
 **layering / dependency-direction** decay; D1 catches **missing test coverage**; Q1 catches **over-complex
-functions** — classes the size/coupling metrics are blind to:
+functions**; S1–S2, TS1–TS3, SEC1, M1 and B1 cover the **non-structural** failure modes (supply chain,
+type-system silencing, secrets, the gate's own config, behavior drift — see the root README's "Beyond
+structure" section) — classes the size/coupling metrics are blind to:
 - **L1** is *per-project* — only forbid a path that is genuinely a different layer (on the orchestrator
   repo that owns `coordination/`, you would NOT adopt it). Authored to each repo's architecture.
 - **L2** is *universal* — no product should pin a test to a frozen git ref; round-scoped checks belong

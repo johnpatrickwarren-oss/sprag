@@ -229,7 +229,7 @@ malicious patterns were found.
 - [x] **M3** — fix positional-arg parsing in `arch.mjs init`, `mutate.mjs`, `property.mjs` (skip flag values).
 - [x] **M4** — implement or remove `severity: "warn"` semantics; align THREAT-MODEL/README wording. [implemented: warn reports without blocking]
 - [x] **L1** — fix trailing-newline off-by-one in line counting (`metrics.mjs`, `scan.mjs`).
-- [ ] **L2** — update suite counts in `README.md`/`EXTRACTING.md`; refresh `library/README.md` table.
+- [x] **L2** — update suite counts in `README.md`/`EXTRACTING.md`; refresh `library/README.md` table.
 - [ ] **L3** — `arch-trend.mjs`: no shell-string interpolation; check archive/tar exit status.
 - [ ] **L4** — `detectLang`: add Python; extend `arch init --lang`.
 - [ ] **L5** — ship `run-tests.mjs` (or adjust published `scripts`).

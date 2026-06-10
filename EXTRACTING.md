@@ -7,7 +7,7 @@ LICENSE; samples/tests/baselines stay behind). To split it into a standalone rep
 # from the monorepo root, with git-filter-repo installed:
 git filter-repo --path prototypes/architectural-gate/ --path-rename prototypes/architectural-gate/:
 # then in the new repo:
-npm install && npm test        # 14/14 suites
+npm install && npm test        # all test-*.mjs suites (run-tests.mjs runs every one)
 npm publish                    # publishConfig.access=public; needs npm auth + a real @scope
 ```
 
